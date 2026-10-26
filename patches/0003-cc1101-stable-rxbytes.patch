@@ -1,0 +1,260 @@
+diff --git a/components/wmbus_radio/transceiver_cc1101.cpp b/components/wmbus_radio/transceiver_cc1101.cpp
+--- a/components/wmbus_radio/transceiver_cc1101.cpp
++++ b/components/wmbus_radio/transceiver_cc1101.cpp
+@@ -2,4 +2,5 @@
+ 
+ #include "esphome/core/log.h"
++#include "cc1101_fifo.h"
+ 
+ namespace esphome {
+@@ -270,94 +271,127 @@
+-bool CC1101::read_in_task(uint8_t *buffer, size_t length, uint32_t offset) {
+-  size_t total = 0;
+-  uint32_t last_progress = millis();
+-  const uint32_t started_at = last_progress;
+-  uint16_t early_burst_end[8] = {};
+-  unsigned int burst_count = 0;
+-  uint8_t peak_fifo = 0;
+-
+-  while (total < length) {
+-    // Check for FIFO overflow
+-    uint8_t rxbytes_raw = this->read_status_register(CC1101_RXBYTES);
+-    if (rxbytes_raw & 0x80) {
+-      ESP_LOGW(TAG, "RX FIFO overflow");
+-      this->restart_rx();
+-      return false;
+-    }
+-
+-    uint8_t available = rxbytes_raw & 0x7F;
+-    size_t remaining = length - total;
+-    if (available > peak_fifo)
+-      peak_fifo = available;
+-
+-    if (available > 0) {
+-      // Preserve a byte during the header and all incomplete payload chunks.
+-      // This works around the CC1101 FIFO last-byte erratum.
+-      size_t to_read = 0;
+-      if (offset == 0 || available < remaining) {
+-        if (available > 1) {
+-          to_read = std::min((size_t)(available - 1), remaining);
+-        }
+-      } else {
+-        // Once the promised payload length has arrived, the final chunk
+-        // can be removed. Confirm RXBYTES before draining completely.
+-        uint8_t confirmed = this->read_status_register(CC1101_RXBYTES);
+-        if (confirmed & 0x80) {
+-          ESP_LOGW(TAG, "RX FIFO overflow during final chunk");
+-          this->restart_rx();
+-          return false;
+-        }
+-        if ((confirmed & 0x7F) >= remaining) {
+-          to_read = remaining;
+-        }
+-      }
+-
+-      if (to_read > 0) {
+-        if (total == 0 && offset == 0) {
+-          this->last_rssi_ = (int8_t)this->read_status_register(CC1101_RSSI);
+-        }
+-        this->read_burst(CC1101_RXFIFO, buffer + total, to_read);
+-        if (offset == 3 && length >= 250) {
+-          if (burst_count < 8)
+-            early_burst_end[burst_count] = (uint16_t) (offset + total + to_read);
+-          burst_count++;
+-        }
+-        total += to_read;
+-        last_progress = millis();
+-      }
+-    }
+-
+-    // Check end-of-packet via MARCSTATE (IDLE or RX_END = packet done)
+-    if (total > 0 && total < length) {
+-      uint8_t marcstate = this->read_status_register(CC1101_MARCSTATE) & 0x1F;
+-      if (marcstate == CC1101_MARCSTATE_IDLE || marcstate == CC1101_MARCSTATE_RX_END) {
+-        // Packet finished, drain remaining FIFO
+-        uint8_t final_bytes = this->read_status_register(CC1101_RXBYTES) & 0x7F;
+-        if (final_bytes > 0 && total + final_bytes <= length) {
+-          this->read_burst(CC1101_RXFIFO, buffer + total, final_bytes);
+-          total += final_bytes;
+-        }
+-        break;
+-      }
+-    }
+-
+-    // Timeout: 500ms without progress
+-    if (millis() - last_progress > 500) {
+-      ESP_LOGW(TAG, "RX timeout after %lu bytes (need %lu)", (unsigned long)(total + offset), (unsigned long)(length + offset));
+-      return false;
+-    }
+-
+-    delayMicroseconds(200);
+-  }
+-
+-  if (offset == 3 && length >= 250 && total == length) {
+-    ESP_LOGD(TAG,
+-             "Long RX: bytes=%u bursts=%u peak_fifo=%u ms=%lu rssi=%d burst_end=%u,%u,%u,%u,%u,%u,%u,%u",
+-             (unsigned) (offset + length), burst_count, (unsigned) peak_fifo,
+-             (unsigned long) (millis() - started_at), (int) this->get_rssi(),
+-             (unsigned) early_burst_end[0], (unsigned) early_burst_end[1],
+-             (unsigned) early_burst_end[2], (unsigned) early_burst_end[3],
+-             (unsigned) early_burst_end[4], (unsigned) early_burst_end[5],
+-             (unsigned) early_burst_end[6], (unsigned) early_burst_end[7]);
+-  }
+-  return (total == length);
+-}
++bool CC1101::read_in_task(uint8_t *buffer, size_t length, uint32_t offset) {
++  size_t total = 0;
++  uint32_t last_progress = millis();
++  const uint32_t started_at = last_progress;
++  uint16_t early_burst_end[8] = {};
++  unsigned int burst_count = 0;
++  uint8_t peak_fifo = 0;
++  unsigned int unstable_rxbytes = 0;
++
++  // SWRZ020E: RXBYTES can be inconsistent while a telegram is arriving.
++  auto stable_rxbytes = [this](uint8_t &raw) -> bool {
++    return read_stable_rxbytes(
++        [this]() { return this->read_status_register(CC1101_RXBYTES); }, raw);
++  };
++
++  while (total < length) {
++    // Check for FIFO overflow
++    uint8_t rxbytes_raw = 0;
++    if (!stable_rxbytes(rxbytes_raw)) {
++      unstable_rxbytes++;
++      if (millis() - last_progress > 500) {
++        ESP_LOGW(TAG, "RXBYTES unstable / no progress after %lu bytes",
++                 (unsigned long) (offset + total));
++        return false;
++      }
++      delayMicroseconds(100);
++      continue;
++    }
++    if (rxbytes_raw & 0x80) {
++      ESP_LOGW(TAG, "RX FIFO overflow");
++      this->restart_rx();
++      return false;
++    }
++
++    uint8_t available = rxbytes_raw & 0x7F;
++    size_t remaining = length - total;
++    if (available > peak_fifo)
++      peak_fifo = available;
++    if (available > 64) {
++      ESP_LOGW(TAG, "Invalid RX FIFO count: %u", (unsigned) available);
++      return false;
++    }
++
++    if (available > 0) {
++      // Preserve a byte during the header and all incomplete payload chunks.
++      // This works around the CC1101 FIFO last-byte erratum.
++      size_t to_read = 0;
++      if (offset == 0 || available < remaining) {
++        if (available > 1) {
++          to_read = std::min((size_t)(available - 1), remaining);
++        }
++      } else {
++        // Once the promised payload length has arrived, the final chunk
++        // can be removed. Confirm RXBYTES before draining completely.
++        uint8_t confirmed = 0;
++        if (!stable_rxbytes(confirmed)) {
++          unstable_rxbytes++;
++          confirmed = 0;  // Never drain on an inconsistent count.
++        }
++        if (confirmed & 0x80) {
++          ESP_LOGW(TAG, "RX FIFO overflow during final chunk");
++          this->restart_rx();
++          return false;
++        }
++        if ((confirmed & 0x7F) >= remaining) {
++          to_read = remaining;
++        }
++      }
++
++      if (to_read > 0) {
++        if (total == 0 && offset == 0) {
++          this->last_rssi_ = (int8_t)this->read_status_register(CC1101_RSSI);
++        }
++        this->read_burst(CC1101_RXFIFO, buffer + total, to_read);
++        if (offset == 3 && length >= 250) {
++          if (burst_count < 8)
++            early_burst_end[burst_count] = (uint16_t) (offset + total + to_read);
++          burst_count++;
++        }
++        total += to_read;
++        last_progress = millis();
++      }
++    }
++
++    // Check end-of-packet via MARCSTATE (IDLE or RX_END = packet done)
++    if (total > 0 && total < length) {
++      uint8_t marcstate = this->read_status_register(CC1101_MARCSTATE) & 0x1F;
++      if (marcstate == CC1101_MARCSTATE_IDLE || marcstate == CC1101_MARCSTATE_RX_END) {
++        // Packet finished, drain remaining FIFO
++        uint8_t final_raw = 0;
++        if (!stable_rxbytes(final_raw)) {
++          unstable_rxbytes++;
++        } else if (final_raw & 0x80) {
++          ESP_LOGW(TAG, "RX FIFO overflow on final drain");
++          return false;
++        } else {
++          const size_t final_bytes = final_raw & 0x7F;
++          if (final_bytes > 0 && final_bytes <= length - total) {
++            this->read_burst(CC1101_RXFIFO, buffer + total, final_bytes);
++            total += final_bytes;
++          }
++        }
++        break;
++      }
++    }
++
++    // Timeout: 500ms without progress
++    if (millis() - last_progress > 500) {
++      ESP_LOGW(TAG, "RX timeout after %lu bytes (need %lu)", (unsigned long)(total + offset), (unsigned long)(length + offset));
++      return false;
++    }
++
++    delayMicroseconds(200);
++  }
++
++  if (offset == 3 && length >= 250 && total == length) {
++    ESP_LOGD(TAG,
++             "Long RX: bytes=%u bursts=%u peak_fifo=%u ms=%lu rssi=%d unstable_rxbytes=%u burst_end=%u,%u,%u,%u,%u,%u,%u,%u",
++             (unsigned) (offset + length), burst_count, (unsigned) peak_fifo,
++             (unsigned long) (millis() - started_at), (int) this->get_rssi(),
++             unstable_rxbytes, (unsigned) early_burst_end[0], (unsigned) early_burst_end[1],
++             (unsigned) early_burst_end[2], (unsigned) early_burst_end[3],
++             (unsigned) early_burst_end[4], (unsigned) early_burst_end[5],
++             (unsigned) early_burst_end[6], (unsigned) early_burst_end[7]);
++  }
++  return (total == length);
++}
+diff --git a/components/wmbus_radio/cc1101_fifo.h b/components/wmbus_radio/cc1101_fifo.h
+new file mode 100644
+--- /dev/null
++++ b/components/wmbus_radio/cc1101_fifo.h
+@@ -0,0 +1,24 @@
++#pragma once
++#include <cstdint>
++
++namespace esphome {
++namespace wmbus_radio {
++
++// CC1101 RXBYTES is asynchronous to SPI. Require two consecutive equal reads.
++// Bound attempts so bad samples cannot block the high-priority receiver task.
++template <typename ReadStatus>
++inline bool read_stable_rxbytes(ReadStatus read_status, uint8_t &count) {
++  uint8_t previous = read_status();
++  for (unsigned int attempt = 0; attempt < 8; ++attempt) {
++    const uint8_t current = read_status();
++    if (current == previous) {
++      count = current;
++      return true;
++    }
++    previous = current;
++  }
++  return false;
++}
++
++}  // namespace wmbus_radio
++}  // namespace esphome
