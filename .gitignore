@@ -21,3 +21,8 @@ __pycache__/
 /components/wmbus_radio/*
 /components/wmbus_meter/*
 /components/socket_transmitter/*
+
+# ESPHome direct GitHub component: downloaded source and verified initializer cache
+/components/.shwm_v4_cache/
+/components/.shwm_v4_ready
+/.shwm_v4_install.lock
