@@ -1,0 +1,61 @@
+name: CC1101 RX filter 270.8 kHz experiment — no flash
+on:
+  push:
+    branches:
+      - experiment/cc1101-rx-bw270
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compile_filter_variant:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Prepare clean upstream with only the 270.8 kHz filter change
+        run: bash scripts/prepare_rx_filter_270.sh
+      - name: Verify isolated radio filter delta
+        run: |
+          python tests/test_rx_filter_270.py
+          git -C vendor/rxfilter_270 diff --check
+          git -C vendor/rxfilter_270 diff --stat
+      - name: Generate isolated config with synthetic credentials
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import base64
+          import secrets
+
+          source = Path('config/wmbus-gama350.yaml').read_text()
+          old = 'path: ../vendor/upstream/components'
+          assert source.count(old) == 1, 'Unexpected upstream component path'
+          variant = source.replace(old, 'path: ../vendor/rxfilter_270/components')
+          Path('config/wmbus-gama350-bw270.yaml').write_text(variant)
+
+          credentials = {
+              'wifi_ssid': 'CI-NO-RADIO',
+              'wifi_password': secrets.token_urlsafe(24),
+              'api_encryption_key': base64.b64encode(secrets.token_bytes(32)).decode(),
+              'ota_password': secrets.token_urlsafe(24),
+              'gama350_meter_id': '0x12345678',
+              'apator_meter_id': '0x87654321',
+              'gama350_aes_key': secrets.token_hex(16),
+              'apator_aes_key': secrets.token_hex(16)
+          }
+          Path('config/secrets.yaml').write_text(
+              ''.join(f'{key}: "{value}"\n' for key, value in credentials.items())
+          )
+          PY
+      - name: Install pinned ESPHome
+        run: python -m pip install 'esphome==2026.10.0'
+      - name: Validate and compile filter-variant firmware (no OTA)
+        run: |
+          esphome config config/wmbus-gama350-bw270.yaml
+          esphome compile config/wmbus-gama350-bw270.yaml
