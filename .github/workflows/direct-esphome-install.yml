@@ -1,7 +1,7 @@
 name: ESPHome GitHub one-line component install
 on:
   push:
-    branches: [feature/direct-esphome-install-v4]
+    branches: [feature/direct-esphome-install-v4, main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -32,6 +32,7 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           import base64
+          import os
           import secrets
           src = Path('config/wmbus-gama350.yaml').read_text()
           needle = '''  - source:
@@ -39,11 +40,15 @@ jobs:
                   path: ../vendor/upstream/components'''
           # Preserve original meter configuration; replace only external source.
           assert src.count('path: ../vendor/upstream/components') == 1
+          ref = os.environ.get('GITHUB_HEAD_REF') or os.environ.get('GITHUB_REF_NAME')
+          if not ref or ref.endswith('/merge'):
+              raise AssertionError(f'Unexpected GitHub ref: {ref}')
+          source = 'github://smarthomewithme/wmbus-gama350-reader@' + ref
           src = src.replace(
               '  - source:\n      type: local\n      path: ../vendor/upstream/components',
-              '  - source: github://smarthomewithme/wmbus-gama350-reader@feature/direct-esphome-install-v4\n    refresh: never'
+              f'  - source: {source}\n    refresh: never'
           )
-          assert 'github://smarthomewithme/wmbus-gama350-reader@feature/direct-esphome-install-v4' in src
+          assert source in src
           assert '../vendor/upstream/components' not in src
           Path('config/wmbus-gama350-direct.yaml').write_text(src)
           creds = {
