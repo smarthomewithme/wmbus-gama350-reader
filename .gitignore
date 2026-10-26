@@ -1,0 +1,14 @@
+/vendor/
+/.esphome/
+/config/.esphome/
+**/secrets.yaml
+**/secrets*.yml
+__pycache__/
+.pytest_cache/
+*.pyc
+*.log
+*.elf
+*.bin
+*.map
+*.uf2
+.DS_Store
