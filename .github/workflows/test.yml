@@ -16,9 +16,6 @@ jobs:
         run: bash scripts/prepare_sources.sh
       - name: Enable long-frame diagnostics patch
         run: bash scripts/enable_diagnostics.sh
-      - name: Inspect patch target during CI
-        run: |
-          sed -n '260,385p' vendor/upstream/components/wmbus_radio/transceiver_cc1101.cpp
       - name: Enable stable RXBYTES fix
         run: bash scripts/enable_stable_rxbytes.sh
       - name: Run CC1101 stable RXBYTES fixture
