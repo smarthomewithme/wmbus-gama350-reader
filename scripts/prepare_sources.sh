@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-ROOT="$(cd "$(dirname "\${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 UPSTREAM="https://github.com/SzczepanLeon/esphome-components.git"
 SHA="a732dd0e52c48973fad57e4950a11d8e2f2d6820"
 DEST="$ROOT/vendor/upstream"
