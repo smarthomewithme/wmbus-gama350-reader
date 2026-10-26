@@ -1,7 +1,7 @@
 diff --git a/components/wmbus_radio/transceiver_cc1101.cpp b/components/wmbus_radio/transceiver_cc1101.cpp
 --- a/components/wmbus_radio/transceiver_cc1101.cpp
 +++ b/components/wmbus_radio/transceiver_cc1101.cpp
-@@ -77,8 +77,9 @@
+@@ -77,7 +77,8 @@
    // Modem configuration for 100 kbps, 2-FSK, 50 kHz deviation
    // MDMCFG4: Channel bandwidth and data rate exponent
 -  // BW = f_xtal / (8 * (4 + CHANBW_M) * 2^CHANBW_E) = 26M / (8 * 4 * 4) = ~203 kHz
