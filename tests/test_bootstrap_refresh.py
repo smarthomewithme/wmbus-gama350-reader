@@ -8,7 +8,10 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 import shutil
+import sys
 import tempfile
+import types
+from contextlib import nullcontext
 from unittest.mock import patch
 
 REPOSITORY = Path(__file__).resolve().parents[1]
@@ -18,7 +21,17 @@ BOOTSTRAP = REPOSITORY / "components" / "_bootstrap_v4.py"
 spec = importlib.util.spec_from_file_location("shwm_v4_bootstrap_test", BOOTSTRAP)
 assert spec and spec.loader
 module = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(module)
+# Native test jobs run before ESPHome (and its 'filelock' dependency) is
+# installed. Provide a test-only no-op lock for this single-threaded fixture.
+try:
+    import filelock  # noqa: F401
+    spec.loader.exec_module(module)
+except ModuleNotFoundError as exc:
+    if exc.name != "filelock":
+        raise
+    shim = types.SimpleNamespace(FileLock=lambda *args, **kwargs: nullcontext())
+    with patch.dict(sys.modules, {"filelock": shim}):
+        spec.loader.exec_module(module)
 
 with tempfile.TemporaryDirectory(prefix="wmbus-v4-refresh-test-") as temp:
     root = Path(temp)
