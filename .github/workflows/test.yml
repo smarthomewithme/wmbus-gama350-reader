@@ -39,7 +39,7 @@ jobs:
             'gama350_aes_key': secrets.token_hex(16),
             'apator_aes_key': secrets.token_hex(16),
           }
-          Path('config/secrets.yaml').write_text(''.join(f'{k}: {quote(v)}\\n' for k,v in data.items()))
+          Path('config/secrets.yaml').write_text(''.join(f'{k}: {quote(v)}\n' for k,v in data.items()))
           PYTESTKEYS
       - name: Validate and compile diagnostic firmware (no flash)
         run: |
