@@ -25,8 +25,9 @@ _PATCHES = (
     "0002-cc1101-long-frame-diagnostics.patch",
     "0003-cc1101-stable-rxbytes.patch",
     "0004-radio-diagnostics-and-key-redaction.patch",
+    "0005-experimental-fifo16-threshold.patch",
 )
-_CACHE_LAYOUT = b"shwm-wmbus-v4-separate-initializers-v2\n"
+_CACHE_LAYOUT = b"shwm-wmbus-v4.1-fifo16-isolated-experiment-v1\n"
 _SHIM_SENTINEL = "_shwm_wmbus_v4_bootstrap"
 
 
@@ -79,7 +80,9 @@ def _ready(components_root: Path, cache_root: Path, fingerprint: str) -> bool:
     component = components_root / "wmbus_radio" / "component.cpp"
     if not all(p.is_file() for p in (radio, meter, component)):
         return False
-    return ("RF_DIAG bytes=" in radio.read_text(encoding="utf-8")
+    return ("SHWM v4.1 FIFO16 experiment" in radio.read_text(encoding="utf-8")
+            and "CC1101_FIFOTHR, 0x03" in radio.read_text(encoding="utf-8")
+            and "RF_DIAG bytes=" in radio.read_text(encoding="utf-8")
             and "Key: [REDACTED]" in meter.read_text(encoding="utf-8")
             and "RX_DIAG cumulative" in component.read_text(encoding="utf-8"))
 
@@ -138,6 +141,9 @@ def ensure_v4_components(repo_root: Path) -> Path:
             if ('this->write_register(CC1101_MDMCFG4, 0x5C);' not in radio_text or
                     'this->write_register(CC1101_MDMCFG4, 0x6C);' in radio_text or
                     "RF_DIAG bytes=" not in radio_text or
+                    "CC1101_FIFOTHR, 0x03" not in radio_text or
+                    "CC1101_FIFOTHR, 0x07" in radio_text or
+                    "SHWM v4.1 FIFO16 experiment" not in radio_text or
                     "RX_DIAG cumulative" not in
                     (checkout / "components/wmbus_radio/component.cpp").read_text(encoding="utf-8") or
                     "Key: [REDACTED]" not in meter_text or
@@ -163,7 +169,7 @@ def ensure_v4_components(repo_root: Path) -> Path:
         if not _ready_except_manifest(components_root, cache_root):
             raise RuntimeError("wMBus v4 components did not pass post-install checks")
         (cache_root / "manifest.sha256").write_text(fingerprint + "\n", encoding="ascii")
-        _LOGGER.info("CC1101 v4 components ready; AES startup keys redacted.")
+        _LOGGER.info("CC1101 v4.1 FIFO16 experimental components ready; AES startup keys redacted.")
         return cache_root
 
 
@@ -184,4 +190,5 @@ def _ready_except_manifest(components_root: Path, cache_root: Path) -> bool:
     return (all(p.is_file() for p in (radio, component, meter))
             and "RF_DIAG bytes=" in radio.read_text(encoding="utf-8")
             and "RX_DIAG cumulative" in component.read_text(encoding="utf-8")
-            and "Key: [REDACTED]" in meter.read_text(encoding="utf-8"))
+            and "Key: [REDACTED]" in meter.read_text(encoding="utf-8")
+            and "CC1101_FIFOTHR, 0x03" in radio.read_text(encoding="utf-8"))
