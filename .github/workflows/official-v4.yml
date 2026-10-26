@@ -1,0 +1,75 @@
+name: Official CC1101 v4 validation (no flash)
+on:
+  push:
+    branches: [release/v4-radio-diagnostics, main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  v4-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run native regression tests
+        run: bash scripts/test.sh
+      - name: Prepare pinned upstream plus all four patches
+        run: bash scripts/prepare_cc1101_v4.sh
+      - name: Verify release integrity
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          src = Path('vendor/cc1101_v4/components')
+          driver = (src/'wmbus_radio/transceiver_cc1101.cpp').read_text()
+          radio = (src/'wmbus_radio/component.cpp').read_text()
+          hdr = (src/'wmbus_radio/component.h').read_text()
+          meter = (src/'wmbus_meter/wmbus_meter.cpp').read_text()
+          assert driver.count('this->write_register(CC1101_MDMCFG4, 0x5C);') == 1
+          assert '0x6C' not in driver.split('CC1101_MDMCFG4, ')[1][:5]
+          assert 'RF_DIAG bytes=' in driver
+          assert 'unstable_rxbytes=' in driver
+          assert 'RX_DIAG cumulative' in radio
+          for field in ('headers_failed_', 'payloads_failed_', 'long_radio_frames_'):
+              assert field in hdr and field in radio
+          assert 'Key: [REDACTED]' in meter
+          assert 'Key: %s' not in meter
+          assert 'std::string key = this->get_key();' not in meter
+          PY
+          git -C vendor/cc1101_v4 diff --check
+      - name: Generate isolated CI config and synthetic secrets
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import base64, secrets
+          s = Path('config/wmbus-gama350.yaml').read_text()
+          old = '../vendor/upstream/components'
+          assert s.count(old) == 1
+          Path('config/wmbus-gama350-v4.yaml').write_text(
+              s.replace(old, '../vendor/cc1101_v4/components')
+          )
+          keys = {
+              'wifi_ssid': 'CI-NO-RADIO',
+              'wifi_password': secrets.token_urlsafe(24),
+              'api_encryption_key': base64.b64encode(secrets.token_bytes(32)).decode(),
+              'ota_password': secrets.token_urlsafe(24),
+              'gama350_meter_id': '0x12345678',
+              'apator_meter_id': '0x87654321',
+              'gama350_aes_key': secrets.token_hex(16),
+              'apator_aes_key': secrets.token_hex(16),
+          }
+          Path('config/secrets.yaml').write_text(
+              ''.join(f'{k}: "{v}"\n' for k, v in keys.items())
+          )
+          PY
+      - name: Install ESPHome 2026.10.0
+        run: python -m pip install 'esphome==2026.10.0'
+      - name: Validate and compile v4 example without flashing
+        run: |
+          esphome config config/wmbus-gama350-v4.yaml
+          esphome compile config/wmbus-gama350-v4.yaml
