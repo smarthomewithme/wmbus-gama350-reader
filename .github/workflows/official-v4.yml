@@ -32,6 +32,9 @@ jobs:
           meter = (src/'wmbus_meter/wmbus_meter.cpp').read_text()
           assert driver.count('this->write_register(CC1101_MDMCFG4, 0x5C);') == 1
           assert '0x6C' not in driver.split('CC1101_MDMCFG4, ')[1][:5]
+          assert driver.count('this->write_register(CC1101_FIFOTHR, 0x03);') == 1
+          assert 'this->write_register(CC1101_FIFOTHR, 0x07);' not in driver
+          assert 'SHWM v4.1 FIFO16 experiment' in driver
           assert 'RF_DIAG bytes=' in driver
           assert 'unstable_rxbytes=' in driver
           assert 'RX_DIAG cumulative' in radio
