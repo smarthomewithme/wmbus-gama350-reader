@@ -7,7 +7,9 @@ diff --git a/components/wmbus_radio/transceiver_cc1101.cpp b/components/wmbus_ra
 +#include "cc1101_fifo.h"
  
  namespace esphome {
-@@ -270,94 +271,127 @@
+@@ -268,98 +269,131 @@
+ const char *CC1101::get_name() { return TAG; }
+ 
 -bool CC1101::read_in_task(uint8_t *buffer, size_t length, uint32_t offset) {
 -  size_t total = 0;
 -  uint32_t last_progress = millis();
@@ -229,6 +231,8 @@ diff --git a/components/wmbus_radio/transceiver_cc1101.cpp b/components/wmbus_ra
 +  }
 +  return (total == length);
 +}
+ 
+ } // namespace wmbus_radio
 diff --git a/components/wmbus_radio/cc1101_fifo.h b/components/wmbus_radio/cc1101_fifo.h
 new file mode 100644
 --- /dev/null
