@@ -1,0 +1,72 @@
+diff --git a/components/wmbus_radio/decode3of6.cpp b/components/wmbus_radio/decode3of6.cpp
+--- a/components/wmbus_radio/decode3of6.cpp
++++ b/components/wmbus_radio/decode3of6.cpp
+@@ -36,5 +36,9 @@
+ 
+     auto it = lookupTable.find(code);
+-    if (it == lookupTable.end()) {
++    if (it == lookupTable.end()) {
++      if (coded_data.size() >= 250) {
++        ESP_LOGW(TAG, "Long frame 3of6 error: encoded_byte=%u/%u symbol=%u",
++                 (unsigned) byte_idx, (unsigned) coded_data.size(), (unsigned) i);
++      }
+       ESP_LOGV(TAG, "Invalid code 0x%02X at byte %zu of %zu", code, byte_idx,
+                coded_data.size());
+diff --git a/components/wmbus_radio/transceiver_cc1101.cpp b/components/wmbus_radio/transceiver_cc1101.cpp
+--- a/components/wmbus_radio/transceiver_cc1101.cpp
++++ b/components/wmbus_radio/transceiver_cc1101.cpp
+@@ -269,6 +269,10 @@
+ 
+ bool CC1101::read_in_task(uint8_t *buffer, size_t length, uint32_t offset) {
+-  size_t total = 0;
+-  uint32_t last_progress = millis();
++  size_t total = 0;
++  uint32_t last_progress = millis();
++  const uint32_t started_at = last_progress;
++  uint16_t early_burst_end[8] = {};
++  unsigned int burst_count = 0;
++  uint8_t peak_fifo = 0;
+ 
+   while (total < length) {
+@@ -281,6 +285,8 @@
+     }
+ 
+-    uint8_t available = rxbytes_raw & 0x7F;
+-    size_t remaining = length - total;
++    uint8_t available = rxbytes_raw & 0x7F;
++    size_t remaining = length - total;
++    if (available > peak_fifo)
++      peak_fifo = available;
+ 
+     if (available > 0) {
+@@ -294,6 +300,11 @@
+           this->last_rssi_ = (int8_t)this->read_status_register(CC1101_RSSI);
+         }
+-        this->read_burst(CC1101_RXFIFO, buffer + total, to_read);
+-        total += to_read;
++        this->read_burst(CC1101_RXFIFO, buffer + total, to_read);
++        if (offset == 3 && length >= 250) {
++          if (burst_count < 8)
++            early_burst_end[burst_count] = (uint16_t) (offset + total + to_read);
++          burst_count++;
++        }
++        total += to_read;
+         last_progress = millis();
+       }
+@@ -323,5 +334,15 @@
+   }
+ 
+-  return (total == length);
++  if (offset == 3 && length >= 250 && total == length) {
++    ESP_LOGD(TAG,
++             "Long RX: bytes=%u bursts=%u peak_fifo=%u ms=%lu rssi=%d burst_end=%u,%u,%u,%u,%u,%u,%u,%u",
++             (unsigned) (offset + length), burst_count, (unsigned) peak_fifo,
++             (unsigned long) (millis() - started_at), (int) this->get_rssi(),
++             (unsigned) early_burst_end[0], (unsigned) early_burst_end[1],
++             (unsigned) early_burst_end[2], (unsigned) early_burst_end[3],
++             (unsigned) early_burst_end[4], (unsigned) early_burst_end[5],
++             (unsigned) early_burst_end[6], (unsigned) early_burst_end[7]);
++  }
++  return (total == length);
+ }
+ 
