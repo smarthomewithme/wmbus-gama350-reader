@@ -1,7 +1,7 @@
 name: ESPHome GitHub one-line component install
 on:
   push:
-    branches: [feature/direct-esphome-install-v4, main]
+    branches: [feature/direct-esphome-install-v4, fix/v4-bootstrap-github-refresh, main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -46,7 +46,7 @@ jobs:
           source = 'github://smarthomewithme/wmbus-gama350-reader@' + ref
           src = src.replace(
               '  - source:\n      type: local\n      path: ../vendor/upstream/components',
-              f'  - source: {source}\n    refresh: never'
+              f'  - source: {source}\n    refresh: always'
           )
           assert source in src
           assert '../vendor/upstream/components' not in src
@@ -67,7 +67,12 @@ jobs:
           PY
       - name: Install ESPHome 2026.10.0
         run: python -m pip install 'esphome==2026.10.0'
+      - name: Regression test for ESPHome cached Github refresh
+        run: python tests/test_bootstrap_refresh.py
       - name: Validate using actual GitHub component source (not local vendor)
+        run: |
+          esphome config config/wmbus-gama350-direct.yaml
+      - name: Validate a second time with refresh always
         run: |
           esphome config config/wmbus-gama350-direct.yaml
       - name: Compile using actual GitHub component source (no device access)
