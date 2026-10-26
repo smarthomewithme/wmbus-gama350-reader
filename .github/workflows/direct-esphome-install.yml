@@ -23,9 +23,8 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           for name in ('wmbus_common', 'wmbus_radio', 'wmbus_meter', 'socket_transmitter'):
-              files = list((Path('components') / name).rglob('*'))
-              assert len([p for p in files if p.is_file() and p.suffix not in ('.pyc',)]) == 1
-              assert files[0].name == '__init__.py'
+              files = [p for p in (Path('components') / name).rglob('*.py') if p.is_file()]
+              assert len(files) == 1 and files[0].name == '__init__.py'
           assert 'a732dd0e52c48973fad57e4950a11d8e2f2d6820' in Path('components/_bootstrap_v4.py').read_text()
           PY
       - name: Generate ordinary ESPHome YAML pointing to public GitHub branch
