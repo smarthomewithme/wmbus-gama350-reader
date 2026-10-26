@@ -1,7 +1,7 @@
 name: ESPHome GitHub one-line component install
 on:
   push:
-    branches: [feature/direct-esphome-install-v4, fix/v4-bootstrap-github-refresh, main]
+    branches: [feature/direct-esphome-install-v4, fix/v4-bootstrap-github-refresh, experiment/v4.1-fifo16, main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -72,6 +72,20 @@ jobs:
       - name: Validate using actual GitHub component source (not local vendor)
         run: |
           esphome config config/wmbus-gama350-direct.yaml
+      - name: Assert v4.1 FIFO16 experiment was actually applied
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          root = Path('config/.esphome')
+          matches = list(root.rglob('transceiver_cc1101.cpp'))
+          # ESPHome's source cache may live outside project config.
+          if not matches:
+              matches = list(Path('config').rglob('transceiver_cc1101.cpp'))
+          assert matches, 'No prepared CC1101 source found'
+          assert any('CC1101_FIFOTHR, 0x03' in p.read_text()
+                     and 'SHWM v4.1 FIFO16 experiment' in p.read_text()
+                     for p in matches), [str(p) for p in matches]
+          PY
       - name: Validate a second time with refresh always
         run: |
           esphome config config/wmbus-gama350-direct.yaml
