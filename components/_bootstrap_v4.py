@@ -1,11 +1,12 @@
-"""Install pinned upstream components on first ESPHome import.
+"""Build pinned CC1101 v4 sources inside the ESPHome GitHub component cache.
 
-All source is retrieved on the user's ESPHome build host, never redistributed
-through this repository. This bootstrap is intentionally limited to the exact
-upstream commit and four reviewed patch files in this project.
+The published __init__.py entrypoints MUST remain tracked bootstrap shims.
+GitHub refresh restores tracked files, so upstream initializers live in a
+separate, ignored cache and are executed by the shims without overwriting them.
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 from pathlib import Path
@@ -25,11 +26,12 @@ _PATCHES = (
     "0003-cc1101-stable-rxbytes.patch",
     "0004-radio-diagnostics-and-key-redaction.patch",
 )
+_CACHE_LAYOUT = b"shwm-wmbus-v4-separate-initializers-v2\n"
+_SHIM_SENTINEL = "_shwm_wmbus_v4_bootstrap"
 
 
 def _run(args: list[str], *, cwd: Path | None = None) -> str:
-    # An ESPHome container may be launched inside another Git checkout.
-    # Prevent inherited GIT_DIR etc. from redirecting Git to a different repo.
+    # Avoid inheriting a different repository's Git environment from ESPHome.
     env = {k: v for k, v in os.environ.items()
            if k not in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE",
                         "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES",
@@ -44,24 +46,78 @@ def _run(args: list[str], *, cwd: Path | None = None) -> str:
     return result.stdout.strip()
 
 
-def ensure_v4_components(repo_root: Path) -> None:
+def _fingerprint(repo_root: Path) -> str:
+    digest = hashlib.sha256()
+    digest.update(_CACHE_LAYOUT)
+    digest.update(_COMMIT.encode("ascii"))
+    for name in _PATCHES:
+        patch = repo_root / "patches" / name
+        if not patch.is_file():
+            raise RuntimeError(f"Missing required CC1101 patch: {name}")
+        digest.update(name.encode("ascii"))
+        digest.update(patch.read_bytes())
+    return digest.hexdigest()
+
+
+def _ready(components_root: Path, cache_root: Path, fingerprint: str) -> bool:
+    manifest = cache_root / "manifest.sha256"
+    if not manifest.is_file():
+        return False
+    if manifest.read_text(encoding="ascii").strip() != fingerprint:
+        return False
+    for name in _COMPONENTS:
+        stub = components_root / name / "__init__.py"
+        upstream_initializer = cache_root / name / "__init__.py"
+        if not stub.is_file() or not upstream_initializer.is_file():
+            return False
+        if _SHIM_SENTINEL not in stub.read_text(encoding="utf-8"):
+            return False
+        if _SHIM_SENTINEL in upstream_initializer.read_text(encoding="utf-8"):
+            return False
+    radio = components_root / "wmbus_radio" / "transceiver_cc1101.cpp"
+    meter = components_root / "wmbus_meter" / "wmbus_meter.cpp"
+    component = components_root / "wmbus_radio" / "component.cpp"
+    if not all(p.is_file() for p in (radio, meter, component)):
+        return False
+    return ("RF_DIAG bytes=" in radio.read_text(encoding="utf-8")
+            and "Key: [REDACTED]" in meter.read_text(encoding="utf-8")
+            and "RX_DIAG cumulative" in component.read_text(encoding="utf-8"))
+
+
+def _restore_tracked_shims(repo_root: Path, components_root: Path) -> None:
+    """Migrate in-place from the previous loader which overwrote tracked shims.
+
+    The replacement is always taken from this exact GitHub checkout's HEAD,
+    never from the downloaded upstream repository.
+    """
+    for name in _COMPONENTS:
+        stub = components_root / name / "__init__.py"
+        if stub.is_file() and _SHIM_SENTINEL in stub.read_text(encoding="utf-8"):
+            continue
+        path = f"components/{name}/__init__.py"
+        tracked_shim = _run(["git", "show", f"HEAD:{path}"], cwd=repo_root)
+        if _SHIM_SENTINEL not in tracked_shim:
+            raise RuntimeError(f"GitHub component shim not found at {path}")
+        stub.parent.mkdir(parents=True, exist_ok=True)
+        stub.write_text(tracked_shim + "\n", encoding="utf-8")
+
+
+def ensure_v4_components(repo_root: Path) -> Path:
     repo_root = repo_root.resolve()
     components_root = repo_root / "components"
-    marker = components_root / ".shwm_v4_ready"
+    cache_root = components_root / ".shwm_v4_cache"
     lock = FileLock(str(repo_root / ".shwm_v4_install.lock"), timeout=240)
 
     with lock:
-        if marker.is_file() and marker.read_text(encoding="ascii").strip() == _COMMIT:
-            if all((components_root / name / "__init__.py").is_file()
-                   for name in _COMPONENTS):
-                return
-
-        patches_dir = repo_root / "patches"
-        missing = [p for p in _PATCHES if not (patches_dir / p).is_file()]
-        if missing:
-            raise RuntimeError("Required v4 patch files missing: " + ", ".join(missing))
+        fingerprint = _fingerprint(repo_root)
+        _restore_tracked_shims(repo_root, components_root)
+        if _ready(components_root, cache_root, fingerprint):
+            return cache_root
 
         _LOGGER.info("Preparing CC1101 v4 sources from pinned upstream revision.")
+        # The marker is written last. An interrupted update cannot be mistaken
+        # for a valid prepared cache on the next validation.
+        (cache_root / "manifest.sha256").unlink(missing_ok=True)
         with tempfile.TemporaryDirectory(prefix="shwm-wmbus-v4-") as temporary:
             checkout = Path(temporary) / "upstream"
             _run(["git", "clone", "--quiet", _UPSTREAM, str(checkout)])
@@ -70,30 +126,62 @@ def ensure_v4_components(repo_root: Path) -> None:
                 raise RuntimeError("wMBus v4 upstream commit SHA did not match")
 
             for name in _PATCHES:
-                patch = str(patches_dir / name)
+                patch = str(repo_root / "patches" / name)
                 _run(["git", "apply", "--check", patch], cwd=checkout)
                 _run(["git", "apply", patch], cwd=checkout)
             _run(["git", "diff", "--check"], cwd=checkout)
 
             radio = (checkout / "components/wmbus_radio/transceiver_cc1101.cpp")
             meter = (checkout / "components/wmbus_meter/wmbus_meter.cpp")
-            text = radio.read_text(encoding="utf-8")
-            secret_text = meter.read_text(encoding="utf-8")
-            if ('this->write_register(CC1101_MDMCFG4, 0x5C);' not in text or
-                    'this->write_register(CC1101_MDMCFG4, 0x6C);' in text or
-                    "RX_DIAG" not in
+            radio_text = radio.read_text(encoding="utf-8")
+            meter_text = meter.read_text(encoding="utf-8")
+            if ('this->write_register(CC1101_MDMCFG4, 0x5C);' not in radio_text or
+                    'this->write_register(CC1101_MDMCFG4, 0x6C);' in radio_text or
+                    "RF_DIAG bytes=" not in radio_text or
+                    "RX_DIAG cumulative" not in
                     (checkout / "components/wmbus_radio/component.cpp").read_text(encoding="utf-8") or
-                    "Key: [REDACTED]" not in secret_text or
-                    "Key: %s" in secret_text):
+                    "Key: [REDACTED]" not in meter_text or
+                    "Key: %s" in meter_text):
                 raise RuntimeError("wMBus v4 verification failed")
 
-            # Build the full package tree before making the ready marker visible.
-            # Include the original files and license notices unchanged.
             for name in _COMPONENTS:
                 source = checkout / "components" / name
                 if not (source / "__init__.py").is_file():
                     raise RuntimeError(f"Upstream component {name} is missing")
-                shutil.copytree(source, components_root / name, dirs_exist_ok=True)
+                dest = components_root / name
+                dest_cache = cache_root / name
+                dest_cache.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(source / "__init__.py", dest_cache / "__init__.py")
+                # Copy code and licensing notices, but NEVER replace the
+                # Git-tracked ESPHome entrypoint in the checkout.
+                shutil.copytree(
+                    source, dest, dirs_exist_ok=True,
+                    ignore=lambda current, names, source=source:
+                        {"__init__.py"} if Path(current) == source else set(),
+                )
 
-        marker.write_text(_COMMIT + "\n", encoding="ascii")
+        if not _ready_except_manifest(components_root, cache_root):
+            raise RuntimeError("wMBus v4 components did not pass post-install checks")
+        (cache_root / "manifest.sha256").write_text(fingerprint + "\n", encoding="ascii")
         _LOGGER.info("CC1101 v4 components ready; AES startup keys redacted.")
+        return cache_root
+
+
+def _ready_except_manifest(components_root: Path, cache_root: Path) -> bool:
+    """Validate the payload before committing its cache manifest."""
+    for name in _COMPONENTS:
+        stub = components_root / name / "__init__.py"
+        initializer = cache_root / name / "__init__.py"
+        if not stub.is_file() or not initializer.is_file():
+            return False
+        if _SHIM_SENTINEL not in stub.read_text(encoding="utf-8"):
+            return False
+        if _SHIM_SENTINEL in initializer.read_text(encoding="utf-8"):
+            return False
+    radio = components_root / "wmbus_radio" / "transceiver_cc1101.cpp"
+    component = components_root / "wmbus_radio" / "component.cpp"
+    meter = components_root / "wmbus_meter" / "wmbus_meter.cpp"
+    return (all(p.is_file() for p in (radio, component, meter))
+            and "RF_DIAG bytes=" in radio.read_text(encoding="utf-8")
+            and "RX_DIAG cumulative" in component.read_text(encoding="utf-8")
+            and "Key: [REDACTED]" in meter.read_text(encoding="utf-8"))
