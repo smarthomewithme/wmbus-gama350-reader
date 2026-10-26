@@ -16,6 +16,12 @@ jobs:
         run: bash scripts/prepare_sources.sh
       - name: Enable long-frame diagnostics patch
         run: bash scripts/enable_diagnostics.sh
+      - name: Enable stable RXBYTES fix
+        run: bash scripts/enable_stable_rxbytes.sh
+      - name: Run CC1101 stable RXBYTES fixture
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -fsanitize=address,undefined -fno-omit-frame-pointer tests/rxbytes_stability.cpp -o /tmp/rxbytes-test
+          ASAN_OPTIONS=detect_leaks=0 /tmp/rxbytes-test
       - name: Check resulting diff
         run: git -C vendor/upstream diff --check
       - uses: actions/setup-python@v5
