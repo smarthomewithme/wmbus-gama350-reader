@@ -1,53 +1,62 @@
-# wMBus GAMA 350 Reader — instrukcja po polsku
+# wMBus GAMA 350 Reader — ESP32 + CC1101
 
-**Stan na 26 października 2026: wersja eksperymentalna, niepotwierdzona na fizycznym ESP32.**
+**Oficjalne publiczne repozytorium kodu · v4 (wersja diagnostyczna, test na sprzęcie jeszcze przed nami).**
 
-Celem projektu jest poprawny odczyt licznika energii elektrycznej GAMA 350 w Home Assistant. Na początek pracujemy wyłącznie nad GAMA 350 / CC1101 / ESP32, zachowując działający wodomierz Apator. Docelowo repozytorium będzie obsługiwać więcej liczników i odbiorników radiowych.
+[English README](README.md) · [Instrukcja v4](docs/V4_DIAGNOSTICS.md) · [Testy](docs/TEST_PLAN.md)
 
-## Ustalenia
+Projekt umożliwia odczyt GAMA 350 (`amiplus`) i wodomierza Apator (`apatorna1`) w ESPHome/Home Assistant. Zamiast publikowania pełnego kodu zewnętrznego autora, repozytorium pobiera przypiętą wersję jego komponentów i nakłada sprawdzone, jawne poprawki.
 
-- ESP32 DevKit / ESP-IDF / ESPHome 2026.10.0.
-- SPI: SCK `GPIO18`, MOSI `GPIO23`, MISO `GPIO19`, CS `GPIO15`, IRQ `GPIO4`.
-- Częstotliwość 868,950 MHz.
-- GAMA 350: `amiplus`, ID `0x12345678` (przykładowy), tryby `T1/C1`, pakiety około 326 bajtów, sensory energii i mocy pozostają `N/A`.
-- Apator: `apatorna1`, ID `0x87654321` (przykładowy), `T1`, wodomierz działa. NIE zmieniamy pinów i nie ryzykujemy utraty odczytu wody.
-- Nagłówek GAMA po dekodowaniu 3-of-6: `BE44ED14785634120102242A7A`. CRC pierwszego bloku: `242A`.
-- Poprawki w tym repo są kandydatami. Nie potwierdzono jeszcze dekodowania pełnej ramki na urządzeniu.
+## Co jest potwierdzone
 
-## Co przygotowano
+**V3 działa na fizycznym ESP32.** W półgodzinnym logu z zamkniętą bramą GAMA poprawnie odczytano **39 razy na około 60 oczekiwanych transmisji**, odebrano 41 pełnych ramek 326 B, z czego dwie miały błąd 3-of-6. Apator został poprawnie zdekodowany 161 razy. Oznacza to, że dekoder energii działa, ale odbiór GAMA nadal nie jest stuprocentowy.
 
-- Przypięcie kodu źródłowego SzczepanLeona do dokładnego SHA `a732dd0e52c48973fad57e4950a11d8e2f2d6820`, zamiast ruchomego `@main`.
-- Skrypt pobierający ten commit i nakładający małą poprawkę na trzy pliki źródłowe.
-- Konfigurację demonstracyjną ESPHome z GAMA 350 i Apatorem, z kluczami przechowywanymi poza GitHubem.
-- Testy C++ (w tym AddressSanitizer) i model odczytu FIFO dla pakietów 53/326/430 bajtów.
-- Plan weryfikacji sprzętowej, metryki sukcesów i sposób rollbacku.
+**V4 to diagnostyka na bazie v3**, bez zmiany pasma filtra (pozostaje 325 kHz), pinów, kluczy i konfiguracji modemu. Dodaje raport statystyk etapu odbioru co pięć minut, `FREQEST/LQI/MARCSTATE` po odebraniu długiej ramki oraz zasłania klucze AES w logach startowych.
 
-## Instrukcja — Windows PowerShell
+V4 nie ma jeszcze potwierdzonej skuteczności na sprzęcie — zielony build nie zastępuje testu przy zamkniętej bramie.
 
-Po utworzeniu lokalnego katalogu projektu i wejściu do niego:
+## Instalacja (oficjalny kod z main)
 
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\prepare_sources.ps1
-Copy-Item .\config\secrets.example.yaml .\config\secrets.yaml
-# Następnie UZUPEŁNIJ config\secrets.yaml swoim Wi-Fi, API, OTA i kluczami AES.
-# Na komputerze z ESPHome 2026.10.0:
-esphome config .\config\wmbus-gama350.yaml
-esphome compile .\config\wmbus-gama350.yaml
+```bash
+cd /config/esphome/wmbus-gama350-reader
+git fetch origin
+git switch main
+git pull --ff-only origin main
+bash scripts/prepare_cc1101_v4.sh
 ```
 
-**To tylko przygotowanie i kompilacja. Nic nie wgrywa się na ESP32.** Nigdy nie wysyłaj `secrets.yaml` ani kluczy AES do publicznego repo.
+Źródła powstaną w `vendor/cc1101_v4/components`. Skrypt nie nadpisuje istniejących katalogów ani firmware. **Najpierw zachowaj kopię działającego YAML i pliku firmware v3.**
 
-**UWAGA:** przykładowy YAML nie zawiera konfiguracji przekazywania ramek przez `socket_transmitter`/UDP. Jeśli jest używana, należy zachować jej dotychczasowe ustawienia i scalić zmiany z istniejącą konfiguracją.
+W istniejącym `wmbus-reader.yaml` podmień wyłącznie sekcję:
 
-## Przed testem OTA
+```yaml
+external_components:
+  - source:
+      type: local
+      path: /config/esphome/wmbus-gama350-reader/vendor/cc1101_v4/components
+    components:
+      - wmbus_radio
+      - wmbus_common
+      - wmbus_meter
+      - socket_transmitter
+```
 
-1. Zachowaj obecną działającą konfigurację i firmware, aby móc cofnąć zmianę.
-2. Upewnij się, że `git` wskazuje dokładny commit i lokalnie nałożoną poprawkę (`git -C vendor/upstream diff --stat`).
-3. Sprawdź kompilację ESPHome oraz stabilność Apatora.
-4. Po **osobnej zgodzie** na flash monitoruj odczyty GAMA i wody oraz pełne CRC.
+Nie podmieniaj całego YAML przykładową konfiguracją z repozytorium. Zachowaj dotychczasowe ID liczników, klucze AES, ESP32 GPIO18/19/23 (SPI), GPIO15 (CS), GPIO4 (IRQ), częstotliwość 868,950 MHz, API, Wi-Fi i UDP.
 
-Szczegóły: [Plan testów](docs/TEST_PLAN.md) i [Aktualny stan](docs/STATUS.md).
+Po utworzeniu kopii użyj ESPHome **Clean Build Files → Validate → Install → Wirelessly**. Nic w GitHub Actions nie wgrywa firmware na urządzenie.
 
-## Status licencji
+## Jak interpretować v4
 
-Repo publikuje tylko własne pliki, testy, instrukcje i niewielkie poprawki. Nie zawiera kopii kompletnego `esphome-components`. Samo repo autora nie ma rozpoznanej licencji GitHub, chociaż wybrane pliki driverów zawierają GPL-3.0-or-later. MIT w tym projekcie dotyczy tylko naszego kodu.
+- `RX_DIAG` — skumulowane liczniki przerwań, odebranych nagłówków i ramek, błędów i strat w kolejce. **Przerwanie nie oznacza poprawnego telegramu GAMA**.
+- `RF_DIAG` — stan modemu (`freqest_raw`, `lqi_raw`, `marcstate`) po odebraniu długiej ramki; nie wykrywa brakujących transmisji.
+- `Long RX`, `Long frame 3of6 error`, `RX FIFO overflow` — diagnostyka zachowana z v3.
+- `Key: [REDACTED]` — klucz AES nie jest wyświetlany w logu rozruchowym v4.
+
+Pełna procedura testowa i powrót do poprzedniej wersji: [docs/V4_DIAGNOSTICS.md](docs/V4_DIAGNOSTICS.md).
+
+## Licencje i prywatność
+
+Własne skrypty, testy, dokumentacja i poprawki na licencji MIT. Upstream [SzczepanLeon/esphome-components](https://github.com/SzczepanLeon/esphome-components) jest pobierany osobno z dokładnego commita; jego licencja i prawa autorów nie są przejmowane przez licencję tego repozytorium. Część zależności ma odrębne warunki, m.in. GPL.
+
+Nigdy nie publikuj prawdziwych kluczy AES, danych API/OTA, `secrets.yaml` ani niezredagowanych logów ESPHome. Starsze wydania komponentu drukowały klucze przy uruchamianiu — publiczne skopiowane logi trzeba traktować jako wrażliwe.
+
+To projekt społecznościowy do **odczytu** telegramów radiowych, nie rozwiązanie certyfikowane do rozliczeń energii.
