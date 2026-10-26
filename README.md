@@ -1,69 +1,61 @@
-# wMBus GAMA 350 Reader — ESP32 + CC1101
+# wMBus GAMA 350 Reader for ESPHome
 
-**Official public source repository · v4 diagnostic candidate (hardware validation pending).**
+ESP32 + CC1101 · Home Assistant · GAMA 350 (`amiplus`) · Apator (`apatorna1`)
 
-**Polski:** [README.pl.md](README.pl.md) · [v4 upgrade and rollback](docs/V4_DIAGNOSTICS.md) · [tests](docs/TEST_PLAN.md)
+**Official public v4 diagnostic source. Installs directly from GitHub in ESPHome — no terminal, clone, patches or local paths required.**
 
-This repository maintains reproducible, inspectable patches for the CC1101 wM-Bus receiver on ESPHome. It reads GAMA 350 electricity meter T1 telegrams through the existing upstream `amiplus` decoder and preserves Apator `apatorna1` reception.
+[Instrukcja po polsku](README.pl.md) · [Diagnostics and rollback](docs/V4_DIAGNOSTICS.md) · [Upstream project](https://github.com/SzczepanLeon/esphome-components)
 
-## Verified hardware results and honest limits
+## 1. Install in ESPHome (recommended)
 
-- **v3 hardware-tested, 26 Oct 2026:** 39 successfully decoded GAMA telegrams in roughly 30 minutes (around 65% of 60 expected 30-second transmissions); 41 complete 326-byte frames, with two 3-of-6 errors. 161 Apator messages decoded correctly. 2 RX FIFO overflows were logged. Gateway/door remained shut during the sample.
-- Complete GAMA frames that made it through the receive pipeline decoded at 39/41 (95%). This does **not** establish 95% end-to-end reception or demonstrate that v3 outperforms another version under identical RF conditions.
-- **v4 is an observational update built on v3**: periodic receiver-stage counters, post-frame modem status snapshots, and safe AES startup log redaction. The 325 kHz CC1101 receive filter, GPIO wiring, frequency, and meter drivers are unchanged. Physical v4 reception has **not yet been measured**.
-- Radio conditions can still cause missed broadcasts. The GPIO4 interrupt indicates an RX FIFO threshold, not a guaranteed sync event or a missed GAMA transmission. No firmware can guarantee reliable reception through a heavily attenuating path.
-
-## Install sources (safe and reproducible)
-
-The project intentionally **does not commit or relicense upstream files**. It checks out the exact upstream revision and applies four inspectable patches in a separate ignored directory:
-
-```bash
-git clone https://github.com/smarthomewithme/wmbus-gama350-reader.git
-cd wmbus-gama350-reader
-bash scripts/prepare_cc1101_v4.sh
-```
-
-This creates `vendor/cc1101_v4/components` without overwriting `vendor/upstream`, `vendor/cc1101_v3`, configuration or firmware. If the target folder exists, the script refuses to modify it.
-
-Configure your **existing** ESPHome node's `external_components` to use that directory, keeping your own pins, Wi-Fi, AES keys, meter IDs, automations and UDP forwarding. Example for a repo installed under `/config/esphome/wmbus-gama350-reader`:
+Open your existing ESPHome device YAML and **replace its current `external_components` entry** with:
 
 ```yaml
 external_components:
-  - source:
-      type: local
-      path: /config/esphome/wmbus-gama350-reader/vendor/cc1101_v4/components
+  - source: github://smarthomewithme/wmbus-gama350-reader@main
     components: [wmbus_radio, wmbus_common, wmbus_meter, socket_transmitter]
 ```
 
-**Do not replace a working YAML with the repository's demonstration config.** Back up the existing YAML and firmware. Run ESPHome Clean Build Files, Validate and a local Compile before considering OTA. There is **no automatic flashing**.
+Save → Validate → Install → Wirelessly. If previously using a different version of these components, perform **Clean Build Files** before installing.
 
-Full instructions, expected diagnostics and rollback: [docs/V4_DIAGNOSTICS.md](docs/V4_DIAGNOSTICS.md).
+**Do not copy the example YAML over your device.** Keep your existing ESP32 pins, radio frequency, Wi-Fi/API/OTA configuration, meter IDs, AES keys, sensors and any UDP forwarding exactly as they were. Preserve a copy of the previously working YAML and firmware for rollback.
 
-## Hardware profile used for field test
+A working ESPHome 2026.10.0 installation with GitHub access is required. The first validation may take longer because the build system downloads the upstream component source automatically. There is no terminal command for the user.
 
-| CC1101 signal | ESP32 DevKit |
-|---|---|
-| SCK | GPIO18 |
-| MOSI | GPIO23 |
-| MISO | GPIO19 |
-| CS | GPIO15 |
-| IRQ / GDO0 | GPIO4 |
+## 2. What makes this possible?
 
-Radio 868.950 MHz; ESPHome 2026.10.0; CC1101 `MDMCFG4=0x5C` (325 kHz). These are field-tested settings, **not universal wiring instructions**.
+The public repository hosts four small ESPHome component entrypoints in `components/` and a pinned-source bootstrap loader. During the first validation on the ESPHome build host, the loader:
 
-## Changes from upstream
+1. Downloads [SzczepanLeon's original component repository](https://github.com/SzczepanLeon/esphome-components) at SHA `a732dd0e52c48973fad57e4950a11d8e2f2d6820`.
+2. Applies four inspectable local patch files from this repository.
+3. Verifies the unchanged 325 kHz CC1101 receiver filter and redacted AES config logs.
+4. Makes the downloaded components available to ESPHome for compilation.
 
-- `0001`: packet buffer/decode boundary safety, CC1101 FIFO last-byte handling.
-- `0002`: long-frame 3-of-6 and FIFO burst diagnostics.
-- `0003`: bounded stable `RXBYTES` polling to avoid trusting single asynchronous readings.
-- `0004`: cumulative `RX_DIAG` telemetry, `RF_DIAG` modem snapshots after successful radio reception, and redacted AES key display during ESPHome startup.
+**All these steps run automatically inside ESPHome.** The source pin guards against upstream changes, and there are no additional repositories or installers to configure in YAML. Unlike shipping a full fork, this project does not redistribute the original upstream files or the GPL-covered `wmbusmeters` implementation.
 
-Run regression tests using `bash scripts/test.sh`. An independent [GitHub Actions workflow](.github/workflows/official-v4.yml) validates all patches and compiles a synthetic-secret ESPHome firmware. The workflows never contact or flash a physical ESP32.
+## 3. Real hardware evidence
 
-## Security and licensing
+The previous v3 code ran on a physical ESP32 in October 2026 with the garage door closed. In approximately 30 minutes it decoded 39 GAMA frames (out of ~60 transmissions expected at the observed 30-second rate), received 41 complete GAMA radio frames including two 3-of-6 errors, and decoded 161 Apator water meter telegrams. It therefore **works, but misses some GAMA transmissions**.
 
-Never paste real AES keys, `secrets.yaml`, MQTT/API credentials or unredacted meter telegrams into public issues or commits. **Earlier upstream and v3 firmwares print the meter AES key in the boot log**; v4 redacts that startup field. Already shared logs remain sensitive and must be handled separately. Other logging of decrypted telegrams is enabled by DEBUG and may reveal consumption.
+The v4 release retains v3 CC1101 radio configuration and adds diagnostic counters / modem snapshots, plus masks the AES key on boot. Its reception reliability **has not yet been measured on physical hardware**. A successful ESPHome CI build does not prove 100% reception.
 
-Original project files and incremental patches are MIT under [LICENSE](LICENSE). The third-party upstream source is fetched separately from [SzczepanLeon/esphome-components](https://github.com/SzczepanLeon/esphome-components). This license does not grant redistribution rights to upstream code or third-party components (some include GPL notices). No prebuilt firmware containing third-party code is distributed here.
+## 4. V4 diagnostics
 
-This is a community-developed read-only diagnostic integration, not a billing-certified electricity meter replacement.
+- Every five minutes: `RX_DIAG cumulative` counts the radio FIFO interrupt notifications, successful/failed headers and payload reads, long packets, and queue drops.
+- For complete long packets: `RF_DIAG` records `freqest_raw`, `lqi_raw`, `marcstate`.
+- Existing logs: `Long RX`, `unstable_rxbytes`, `Long frame 3of6 error`.
+- ESPHome startup config: `Key: [REDACTED]` instead of printing real meter AES secrets.
+
+A GPIO4/FIFO interrupt is **not** the same as a decoded meter telegram; the counters are diagnostic, not a transmission guarantee.
+
+## 5. Security and licensing
+
+No production keys or identifiable real telegram logs are committed. Older firmwares (including original upstream and v3) can print unredacted AES keys at boot. V4 masks that field but DEBUG logs may still contain private decrypted meter measurements. Redact before posting publicly.
+
+Original project glue and patches are MIT-licensed. The bootstrap fetches upstream sources separately and preserves their attribution and applicable licenses. Third-party upstream code is **not** relicensed by the repository's MIT license. See [SECURITY.md](SECURITY.md).
+
+### Developer-only manual build
+
+Developers who want a reproducible local tree can still run `bash scripts/prepare_cc1101_v4.sh`, but **this is not necessary for normal ESPHome installation**.
+
+This is a community read-only receiver, not a utility billing-certified device.

@@ -1,0 +1,75 @@
+name: ESPHome GitHub one-line component install
+on:
+  push:
+    branches: [feature/direct-esphome-install-v4, main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-direct-install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check bootstrap source compiles and has no vendor code
+        run: |
+          python -m compileall -q components
+          python - <<'PY'
+          from pathlib import Path
+          for name in ('wmbus_common', 'wmbus_radio', 'wmbus_meter', 'socket_transmitter'):
+              files = [p for p in (Path('components') / name).rglob('*.py') if p.is_file()]
+              assert len(files) == 1 and files[0].name == '__init__.py'
+          assert 'a732dd0e52c48973fad57e4950a11d8e2f2d6820' in Path('components/_bootstrap_v4.py').read_text()
+          PY
+      - name: Generate ordinary ESPHome YAML pointing to public GitHub branch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import base64
+          import os
+          import secrets
+          src = Path('config/wmbus-gama350.yaml').read_text()
+          needle = '''  - source:
+                  type: local
+                  path: ../vendor/upstream/components'''
+          # Preserve original meter configuration; replace only external source.
+          assert src.count('path: ../vendor/upstream/components') == 1
+          ref = os.environ.get('GITHUB_HEAD_REF') or os.environ.get('GITHUB_REF_NAME')
+          if not ref or ref.endswith('/merge'):
+              raise AssertionError(f'Unexpected GitHub ref: {ref}')
+          source = 'github://smarthomewithme/wmbus-gama350-reader@' + ref
+          src = src.replace(
+              '  - source:\n      type: local\n      path: ../vendor/upstream/components',
+              f'  - source: {source}\n    refresh: never'
+          )
+          assert source in src
+          assert '../vendor/upstream/components' not in src
+          Path('config/wmbus-gama350-direct.yaml').write_text(src)
+          creds = {
+              'wifi_ssid': 'CI-NO-RADIO',
+              'wifi_password': secrets.token_urlsafe(24),
+              'api_encryption_key': base64.b64encode(secrets.token_bytes(32)).decode(),
+              'ota_password': secrets.token_urlsafe(24),
+              'gama350_meter_id': '0x12345678',
+              'apator_meter_id': '0x87654321',
+              'gama350_aes_key': secrets.token_hex(16),
+              'apator_aes_key': secrets.token_hex(16),
+          }
+          Path('config/secrets.yaml').write_text(
+              ''.join(f'{k}: "{v}"\n' for k, v in creds.items())
+          )
+          PY
+      - name: Install ESPHome 2026.10.0
+        run: python -m pip install 'esphome==2026.10.0'
+      - name: Validate using actual GitHub component source (not local vendor)
+        run: |
+          esphome config config/wmbus-gama350-direct.yaml
+      - name: Compile using actual GitHub component source (no device access)
+        run: |
+          esphome compile config/wmbus-gama350-direct.yaml

@@ -1,73 +1,46 @@
-# CC1101 v4 — instalacja, diagnostyka i wycofanie
+# CC1101 v4 — instalacja i diagnostyka ESPHome
 
-## Status i zakres
+## Instalacja bez terminala
 
-Projekt publikuje oficjalny, powtarzalny **kandydat v4 do testów sprzętowych**. Działający v3 odebrał 39 poprawnych telegramów GAMA na około 60 oczekiwanych w 30 minut. v4 zachowuje tor odbioru v3 i filtr 325 kHz, ale dodaje diagnostykę oraz maskowanie kluczy AES przy starcie.
-
-Nie jest to gwarancja odbioru wszystkich transmisji przy zamkniętej bramie.
-
-## Przygotowanie
-
-W terminalu Home Assistanta (repozytorium umieszczone w `/config/esphome/wmbus-gama350-reader`):
-
-```bash
-cd /config/esphome/wmbus-gama350-reader
-git fetch origin
-git switch main
-git pull --ff-only origin main
-bash scripts/prepare_cc1101_v4.sh
-```
-
-Skrypt odmówi nadpisania istniejącego `vendor/cc1101_v4`. Nie modyfikuje wgranego firmware ani YAML. Repo nie zawiera prywatnych kluczy.
-
-Utwórz kopię **właściwego** YAML, zachowując zaszyfrowane ustawienia OTA i Wi-Fi:
-
-```bash
-mkdir -p /config/esphome/backups
-cp -p /config/esphome/wmbus-reader.yaml \
-  "/config/esphome/backups/wmbus-reader-$(date +%Y%m%d-%H%M%S).yaml"
-```
-
-Jeśli posiadasz sprawdzone firmware v3, zachowaj też jego `.bin`.
-
-## Zmiana YAML (bez innych zmian)
+W ESPHome edytuj **istniejący plik YAML** swojego urządzenia, zachowując całą konfigurację. Zamień dotychczasową sekcję `external_components` na:
 
 ```yaml
 external_components:
-  - source:
-      type: local
-      path: /config/esphome/wmbus-gama350-reader/vendor/cc1101_v4/components
-    components:
-      - wmbus_radio
-      - wmbus_common
-      - wmbus_meter
-      - socket_transmitter
+  - source: github://smarthomewithme/wmbus-gama350-reader@main
+    components: [wmbus_radio, wmbus_common, wmbus_meter, socket_transmitter]
 ```
 
-W pliku YAML ma istnieć tylko jedna sekcja `external_components`. Nie zmieniaj pinów, parametrów CC1101, kluczy, częstotliwości, nazw sensorów ani przekazywania UDP. W ESPHome użyj **Clean Build Files → Validate → Install → Wirelessly** dopiero po sprawdzeniu zielonej kompilacji CI i utworzeniu kopii.
+Zapisz, wybierz **Clean Build Files**, następnie **Validate** i **Install → Wirelessly**. Nie zmieniaj kluczy AES, GPIO, SPI, częstotliwości 868.950 MHz, sensorów ani automatyzacji. Zachowaj kopię działającego YAML i poprzedni firmware, aby móc cofnąć zmianę.
 
-## Nowe komunikaty
+ESPHome podczas pierwszej walidacji sam pobierze kod SzczepanLeona w wersji przypiętej do SHA, nałoży cztery poprawki i skompiluje komponenty. Z tego powodu pierwsza walidacja wymaga internetu i może trwać dłużej.
 
-Co 5 minut pojawia się zbiorcze `[wmbus] RX_DIAG cumulative` z polami:
+## Diagnostyka po OTA
 
-- `irq_notifications` — liczba notyfikacji przerwania FIFO (nie liczba transmisji GAMA);
-- `header_ok` / `header_fail` — udane i nieudane pobrania pierwszych trzech bajtów;
-- `payload_ok` / `payload_fail` — ilości odbiorów po rozpoznaniu nagłówka, liczone dla wszystkich liczników;
-- `long_radio_frames` — długie ramki odebrane przez radio, niezależnie od wyniku 3-of-6/CRC;
-- `queue_drops` — utrata ramki przy kolejce.
+**Brama zamknięta, 30 minut bez restartowania ESP32.** W logach liczymy:
+- `Telegram otrzymany od licznika prądu!` — poprawne odczyty GAMA;
+- `Long RX: bytes=326` — odebrane przez radio pełne ramki;
+- `Long frame 3of6 error` — uszkodzone symbole;
+- `RX FIFO overflow` i `RX timeout` — nieudane odbiory;
+- `Telegram otrzymany od licznika wody!` — regresje Apatora;
+- `RX_DIAG cumulative` — co pięć minut łączna liczba przerwań, sukcesów i niepowodzeń podczas czytania nagłówków, payloadów i kolejki;
+- `RF_DIAG` — `freqest_raw`, `lqi_raw`, `marcstate` po odebraniu długiej ramki.
 
-Po kompletnym długim telegramie `[CC1101] RF_DIAG` wypisuje `freqest_raw` (wartość ze znakiem), `lqi_raw` i `marcstate`. To **chwilowe dane modemu przy odbiorze**, nie informacje o telegramach, które w ogóle nie wywołały przerwania. Zachowano `Long RX` i `Long frame 3of6 error` z v3.
+**Nie utożsamiaj liczby przerwań GPIO4 z liczbą rzeczywistych telegramów GAMA.** Mierzy zdarzenia progu FIFO CC1101. Nie jest to sprzętowy licznik wszystkich transmisji.
 
-W logu rozruchowym `Key: [REDACTED]` zastępuje surowy klucz AES. To nie usuwa klucza z wcześniejszych logów i nie anonimizuje surowych telegramów.
+W logach rozruchowych v4 powinien pojawić się komunikat `Key: [REDACTED]`. Nie publikuj starych logów, w których komponent wypisywał AES jawnie. Także inne logi DEBUG mogą zdradzać dane pomiarowe i adresy sieciowe.
 
-## Próba porównawcza
+## Przywrócenie wcześniejszej wersji
 
-Zamknij bramę i zbieraj dane przez 30 minut bez restartu. Policz prawidłowe `Telegram otrzymany od licznika prądu!` oraz `Long RX`, błędy 3-of-6 i FIFO oraz odczyty Apatora. Nie interpretuj liczby `irq_notifications` jako liczby nadanych ramek przez GAMA. Przyjmij 30 s tylko jako zaobserwowany przybliżony okres.
+W edytorze ESPHome przywróć zapisaną sekcję `external_components` i wcześniejszy YAML, następnie wybierz **Clean Build Files → Validate → Install → Wirelessly**. Gdy dysponujesz poprzednim `.bin`, można go wgrać przez obsługiwany interfejs OTA. Sam restart urządzenia **nie** zmienia wersji firmware.
 
-Jeżeli odczyty się pogorszą, przywróć poprzedni YAML i wcześniejszy `.bin` przez OTA. Sam reboot **nie** przywróci poprzedniej wersji sterownika.
+## Dlaczego pobieramy kod przy walidacji?
 
-## Zasady publikacji
+Główne repozytorium nie publikuje kopii komponentów autora ani bibliotek `wmbusmeters`. Kod pochodzi z [SzczepanLeon/esphome-components](https://github.com/SzczepanLeon/esphome-components) i jest pobierany automatycznie w dokładnej wersji `a732dd0e52c48973fad57e4950a11d8e2f2d6820`, po czym nakładane są cztery publiczne poprawki. To rozwiązanie spełnia wymaganie bezterminalowej instalacji i zachowuje prawa oryginalnych autorów.
 
-Nie przesyłaj publicznie pełnych logów debugowania przed usunięciem kluczy, identyfikatorów, adresów sieciowych i prywatnych danych pomiarowych. Kod zewnętrzny jest pobierany ze wskazanego upstream; jego licencja nie jest zastępowana licencją MIT tego projektu.
+## Status
 
-V4 oznacza oficjalnie opublikowany kod źródłowy i procedurę testową, a **nie** certyfikowany odbiornik czy gwarantowaną poprawkę RF.
+V3 miało 39 poprawnych odczytów na około 60 oczekiwanych w 30 minut oraz 161 poprawnych telegramów Apatora przy zamkniętej bramie. V4 nie zmienia filtra 325 kHz i wnosi diagnostykę oraz redakcję sekretów; **wyniki v4 na fizycznym ESP32 pozostają do weryfikacji**.
+
+### Opcjonalnie dla deweloperów
+
+Skrypt `scripts/prepare_cc1101_v4.sh` umożliwia izolowany build lokalny, ale **nie jest wymagany do normalnej instalacji**.
