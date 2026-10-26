@@ -1,0 +1,13 @@
+diff --git a/components/wmbus_radio/transceiver_cc1101.cpp b/components/wmbus_radio/transceiver_cc1101.cpp
+--- a/components/wmbus_radio/transceiver_cc1101.cpp
++++ b/components/wmbus_radio/transceiver_cc1101.cpp
+@@ -36,8 +36,9 @@ void CC1101::setup() {
+   ESP_LOGVV(TAG, "configuring FIFO threshold");
+-  // FIFO threshold: 7 = RX FIFO >= 32 bytes, TX FIFO <= 31 bytes
+-  this->write_register(CC1101_FIFOTHR, 0x07);
++  // SHWM v4.1 experiment: threshold 3 = RX FIFO >= 16 bytes.
++  // Earlier interrupt wake-up leaves more headroom before the 64B RX FIFO fills.
++  this->write_register(CC1101_FIFOTHR, 0x03);
++  ESP_LOGI(TAG, "SHWM v4.1 FIFO16 experiment: RX threshold 16B (baseline 32B)");
+ 
+   ESP_LOGVV(TAG, "configuring sync word");
