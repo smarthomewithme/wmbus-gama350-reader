@@ -1,0 +1,14 @@
+diff --git a/components/wmbus_radio/transceiver_cc1101.cpp b/components/wmbus_radio/transceiver_cc1101.cpp
+--- a/components/wmbus_radio/transceiver_cc1101.cpp
++++ b/components/wmbus_radio/transceiver_cc1101.cpp
+@@ -77,8 +77,9 @@
+   // Modem configuration for 100 kbps, 2-FSK, 50 kHz deviation
+   // MDMCFG4: Channel bandwidth and data rate exponent
+-  // BW = f_xtal / (8 * (4 + CHANBW_M) * 2^CHANBW_E) = 26M / (8 * 4 * 4) = ~203 kHz
+-  this->write_register(CC1101_MDMCFG4, 0x5C);
++  // 26 MHz crystal, CHANBW_E=1, CHANBW_M=2: 26e6/(8*(4+2)*2^1) = 270833 Hz.
++  // Only the receive-channel bandwidth is changed; DRATE_E remains 0x0C.
++  this->write_register(CC1101_MDMCFG4, 0x6C);
+   // MDMCFG3: Data rate mantissa
+   // DRATE = ((256 + DRATE_M) * 2^DRATE_E) * f_xtal / 2^28 = 100 kbps
+   this->write_register(CC1101_MDMCFG3, 0x04);
