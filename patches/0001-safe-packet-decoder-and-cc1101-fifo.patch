@@ -1,0 +1,68 @@
+diff --git a/components/wmbus_radio/component.cpp b/components/wmbus_radio/component.cpp
+--- a/components/wmbus_radio/component.cpp
++++ b/components/wmbus_radio/component.cpp
+@@ -91,5 +91,7 @@
+   auto packet = std::make_unique<Packet>();
+
+-  if (!this->radio->read_in_task(packet->rx_data_ptr(), packet->rx_capacity(), 0)) {
++  auto *header_data = packet->rx_data_ptr();
++  const size_t header_capacity = packet->rx_capacity();
++  if (!this->radio->read_in_task(header_data, header_capacity, 0)) {
+     this->radio->restart_rx();
+     return;
+@@ -101,5 +103,7 @@
+   }
+
+-  if (!this->radio->read_in_task(packet->rx_data_ptr(), packet->rx_capacity(), 3)) {
++  auto *payload_data = packet->rx_data_ptr();
++  const size_t payload_capacity = packet->rx_capacity();
++  if (!this->radio->read_in_task(payload_data, payload_capacity, 3)) {
+     this->radio->restart_rx();
+     return;
+diff --git a/components/wmbus_radio/decode3of6.cpp b/components/wmbus_radio/decode3of6.cpp
+--- a/components/wmbus_radio/decode3of6.cpp
++++ b/components/wmbus_radio/decode3of6.cpp
+@@ -31,6 +31,10 @@
+
+     uint8_t code = (data[byte_idx] << bit_offset);
+-    if (bit_offset > 0)
++    if (bit_offset > 2) {
++      if (byte_idx + 1 >= coded_data.size()) {
++        return {};
++      }
+       code |= (data[byte_idx + 1] >> (8 - bit_offset));
++    }
+     code >>= 2;
+
+diff --git a/components/wmbus_radio/transceiver_cc1101.cpp b/components/wmbus_radio/transceiver_cc1101.cpp
+--- a/components/wmbus_radio/transceiver_cc1101.cpp
++++ b/components/wmbus_radio/transceiver_cc1101.cpp
+@@ -285,8 +285,24 @@
+
+     if (available > 0) {
+-      // CC1101 errata: don't empty FIFO completely when more data expected
+-      size_t to_read = (remaining > 1 && available > 1)
+-                       ? std::min((size_t)(available - 1), remaining)
+-                       : std::min((size_t)available, remaining);
++      // Preserve a byte during the header and all incomplete payload chunks.
++      // This works around the CC1101 FIFO last-byte erratum.
++      size_t to_read = 0;
++      if (offset == 0 || available < remaining) {
++        if (available > 1) {
++          to_read = std::min((size_t)(available - 1), remaining);
++        }
++      } else {
++        // Once the promised payload length has arrived, the final chunk
++        // can be removed. Confirm RXBYTES before draining completely.
++        uint8_t confirmed = this->read_status_register(CC1101_RXBYTES);
++        if (confirmed & 0x80) {
++          ESP_LOGW(TAG, "RX FIFO overflow during final chunk");
++          this->restart_rx();
++          return false;
++        }
++        if ((confirmed & 0x7F) >= remaining) {
++          to_read = remaining;
++        }
++      }
+
+       if (to_read > 0) {

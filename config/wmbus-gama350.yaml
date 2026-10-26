@@ -1,0 +1,139 @@
+# Example configuration. Keep the working device firmware until validation.
+esphome:
+  name: wmbus-reader
+  friendly_name: wMBus Reader GAMA350
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+external_components:
+  - source:
+      type: local
+      path: ../vendor/upstream/components
+    components:
+      - wmbus_radio
+      - wmbus_common
+      - wmbus_meter
+      - socket_transmitter
+
+logger:
+  level: DEBUG
+  logs:
+    packet: DEBUG
+    wmbusmeters: DEBUG
+    main: INFO
+    CC1101: WARN
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  power_save_mode: none
+
+spi:
+  clk_pin: GPIO18
+  mosi_pin: GPIO23
+  miso_pin: GPIO19
+
+wmbus_common:
+  drivers: [amiplus, apatorna1]
+
+wmbus_radio:
+  radio_type: CC1101
+  cs_pin: GPIO15
+  irq_pin: GPIO4
+  frequency: 868.950MHz
+  sync_mode: NORMAL
+
+wmbus_meter:
+  - id: gama350
+    meter_id: !secret gama350_meter_id
+    type: amiplus
+    key: !secret gama350_aes_key
+    mode: [T1, C1]
+    on_telegram:
+      - logger.log:
+          level: INFO
+          format: "GAMA 350 telegram successfully processed"
+
+  - id: apator
+    meter_id: !secret apator_meter_id
+    type: apatorna1
+    key: !secret apator_aes_key
+    mode: [T1]
+    on_telegram:
+      - logger.log:
+          level: INFO
+          format: "Apator telegram successfully processed"
+
+sensor:
+  - platform: wmbus_meter
+    parent_id: gama350
+    field: total_energy_consumption_kwh
+    name: "GAMA 350 energia pobrana"
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    accuracy_decimals: 3
+  - platform: wmbus_meter
+    parent_id: gama350
+    field: total_energy_consumption_tariff_1_kwh
+    name: "GAMA 350 taryfa 1"
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    accuracy_decimals: 3
+  - platform: wmbus_meter
+    parent_id: gama350
+    field: total_energy_consumption_tariff_2_kwh
+    name: "GAMA 350 taryfa 2"
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    accuracy_decimals: 3
+  - platform: wmbus_meter
+    parent_id: gama350
+    field: current_power_consumption_kw
+    name: "GAMA 350 aktualna moc"
+    unit_of_measurement: "kW"
+    device_class: power
+    state_class: measurement
+    accuracy_decimals: 3
+  - platform: wmbus_meter
+    parent_id: gama350
+    field: rssi_dbm
+    name: "GAMA 350 RSSI"
+    unit_of_measurement: "dBm"
+    device_class: signal_strength
+    state_class: measurement
+    entity_category: diagnostic
+    accuracy_decimals: 0
+  - platform: wmbus_meter
+    parent_id: apator
+    field: total_m3
+    name: "Apator zimna woda"
+    unit_of_measurement: "m³"
+    device_class: water
+    state_class: total_increasing
+    accuracy_decimals: 3
+  - platform: wmbus_meter
+    parent_id: apator
+    field: rssi_dbm
+    name: "Apator RSSI"
+    unit_of_measurement: "dBm"
+    device_class: signal_strength
+    state_class: measurement
+    entity_category: diagnostic
+    accuracy_decimals: 0
+
+# Optional socket_transmitter/UDP settings must be retained separately
+# if they are already used by a working installation.
