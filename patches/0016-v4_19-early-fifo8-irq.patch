@@ -1,0 +1,22 @@
+diff --git a/components/wmbus_radio/transceiver_cc1101.cpp b/components/wmbus_radio/transceiver_cc1101.cpp
+--- a/components/wmbus_radio/transceiver_cc1101.cpp
++++ b/components/wmbus_radio/transceiver_cc1101.cpp
+@@ -36,5 +36,7 @@ void CC1101::setup() {
+   // SHWM v4.1 experiment: threshold 3 = RX FIFO >= 16 bytes.
+   // Earlier interrupt wake-up leaves more headroom before the 64B RX FIFO fills.
+-  this->write_register(CC1101_FIFOTHR, 0x03);
+-  ESP_LOGI(TAG, "SHWM v4.1 FIFO16 experiment: RX threshold 16B (baseline 32B)");
++  // SHWM v4.1 FIFO16 experiment is historical; v4.19 tests earlier IRQ wake.
++  // SHWM v4.19: threshold 1 = RX FIFO >= 8 bytes (earlier than 16B).
++  this->write_register(CC1101_FIFOTHR, 0x01);
++  ESP_LOGI(TAG, "SHWM v4.19 FIFO8 ACTIVE: RX threshold 8B (v4.17 baseline 16B)");
+ 
+   ESP_LOGVV(TAG, "configuring sync word");
+diff --git a/components/wmbus_radio/component.cpp b/components/wmbus_radio/component.cpp
+--- a/components/wmbus_radio/component.cpp
++++ b/components/wmbus_radio/component.cpp
+@@ -37,3 +37,4 @@
+   ESP_LOGI(TAG, "SHWM wMBus v4.16 ACTIVE: 50us no-progress polls for long payloads; 100us unstable backoff kept");
+   ESP_LOGI(TAG, "SHWM wMBus v4.17 ACTIVE: midpoint 100us long no-progress polling; v4.16 preserved");
++  ESP_LOGI(TAG, "SHWM wMBus v4.19 ACTIVE: earlier 8B RX FIFO IRQ; v4.17 idle poll retained");
+   ESP_LOGI(TAG, "Receiver task created [%p]", this->receiver_task_handle_);

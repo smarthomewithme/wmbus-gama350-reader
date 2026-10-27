@@ -1,7 +1,7 @@
 name: ESPHome GitHub one-line component install
 on:
   push:
-    branches: [feature/direct-esphome-install-v4, fix/v4-bootstrap-github-refresh, experiment/v4.1-fifo16, experiment/v4.4-stale-irq-clear, experiment/v4.5-isr-woken-init, experiment/v4.9-stable-marcstate-eof, experiment/v4.10-five-minute-rx-diag, experiment/v4.11-rxbytes65-prefetch, experiment/v4.12-overflow-fastpath, experiment/v4.13-progress-poll, experiment/v4.14-prealloc-irq, experiment/v4.16-long-idle-poll, experiment/v4.17-midpoint-long-poll, main]
+    branches: [feature/direct-esphome-install-v4, fix/v4-bootstrap-github-refresh, experiment/v4.1-fifo16, experiment/v4.4-stale-irq-clear, experiment/v4.5-isr-woken-init, experiment/v4.9-stable-marcstate-eof, experiment/v4.10-five-minute-rx-diag, experiment/v4.11-rxbytes65-prefetch, experiment/v4.12-overflow-fastpath, experiment/v4.13-progress-poll, experiment/v4.14-prealloc-irq, experiment/v4.16-long-idle-poll, experiment/v4.17-midpoint-long-poll, experiment/v4.19-early-fifo8-irq, main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -72,7 +72,7 @@ jobs:
       - name: Validate using actual GitHub component source (not local vendor)
         run: |
           esphome config config/wmbus-gama350-direct.yaml
-      - name: Assert v4.17 midpoint polling and preserved v4.16 baseline
+      - name: Assert v4.19 FIFO8 threshold and preserved v4.17 receiver policy
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -82,7 +82,9 @@ jobs:
           if not matches:
               matches = list(Path('config').rglob('transceiver_cc1101.cpp'))
           assert matches, 'No prepared CC1101 source found'
-          assert any('CC1101_FIFOTHR, 0x03' in p.read_text()
+          assert any('CC1101_FIFOTHR, 0x01' in p.read_text()
+                     and 'this->write_register(CC1101_FIFOTHR, 0x03);' not in p.read_text()
+                     and 'SHWM v4.19 FIFO8 ACTIVE' in p.read_text()
                      and 'SHWM v4.1 FIFO16 experiment' in p.read_text()
                      and 'SHWM v4.9 MARCSTATE EOF confirmation' in p.read_text()
                      and 'confirm_marcstate_eof(' in p.read_text()
@@ -112,6 +114,7 @@ jobs:
                      and 'SHWM wMBus v4.14 ACTIVE' in p.read_text()
                       and 'SHWM wMBus v4.16 ACTIVE' in p.read_text()
                       and 'SHWM wMBus v4.17 ACTIVE' in p.read_text()
+                     and 'SHWM wMBus v4.19 ACTIVE' in p.read_text()
                       and 'SHWM wMBus v4.15 ACTIVE' not in p.read_text()
                      and 'SHWM v4.14 packet preallocation' in p.read_text()
                      and 'SHWM v4.12 RX_DIAG_1M' in p.read_text()
