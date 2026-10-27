@@ -1,7 +1,7 @@
 name: ESPHome GitHub one-line component install
 on:
   push:
-    branches: [feature/direct-esphome-install-v4, fix/v4-bootstrap-github-refresh, experiment/v4.1-fifo16, experiment/v4.4-stale-irq-clear, experiment/v4.5-isr-woken-init, experiment/v4.9-stable-marcstate-eof, experiment/v4.10-five-minute-rx-diag, experiment/v4.11-rxbytes65-prefetch, experiment/v4.12-overflow-fastpath, experiment/v4.13-progress-poll, main]
+    branches: [feature/direct-esphome-install-v4, fix/v4-bootstrap-github-refresh, experiment/v4.1-fifo16, experiment/v4.4-stale-irq-clear, experiment/v4.5-isr-woken-init, experiment/v4.9-stable-marcstate-eof, experiment/v4.10-five-minute-rx-diag, experiment/v4.11-rxbytes65-prefetch, experiment/v4.12-overflow-fastpath, experiment/v4.13-progress-poll, experiment/v4.14-prealloc-irq, main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -72,7 +72,7 @@ jobs:
       - name: Validate using actual GitHub component source (not local vendor)
         run: |
           esphome config config/wmbus-gama350-direct.yaml
-      - name: Assert v4.13 post-drain polling and preserved v4.12/v4.9 baseline
+      - name: Assert v4.14 pre-IRQ packet allocation and preserved RX baseline
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -105,11 +105,20 @@ jobs:
                      and 'SHWM v4.10 RX_DIAG_5M' in p.read_text()
                      and 'SHWM wMBus v4.12 ACTIVE' in p.read_text()
                      and 'SHWM wMBus v4.13 ACTIVE' in p.read_text()
+                     and 'SHWM wMBus v4.14 ACTIVE' in p.read_text()
+                     and 'SHWM v4.14 packet preallocation' in p.read_text()
                      and 'SHWM v4.12 RX_DIAG_1M' in p.read_text()
                      and '(void) ulTaskNotifyTake(pdTRUE, 0);' in p.read_text()
                      and 'BaseType_t xHigherPriorityTaskWoken = pdFALSE;' in p.read_text()
                      and 'BaseType_t xHigherPriorityTaskWoken;' not in p.read_text()
                      for p in radio_sources), [str(p) for p in radio_sources]
+          prepared = [p.read_text() for p in radio_sources if 'void Radio::receive_frame() {' in p.read_text()]
+          assert prepared
+          assert any((lambda s: s.count('std::make_unique<Packet>()') == 1 and
+                     s.index('std::make_unique<Packet>()') < s.index('ulTaskNotifyTake(') <
+                     s.index('read_in_task('))(
+                     t.split('void Radio::receive_frame() {',1)[1].split('void Radio::receiver_task(',1)[0])
+                     for t in prepared)
           PY
       - name: Validate a second time with refresh always
         run: |

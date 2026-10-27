@@ -33,8 +33,9 @@ _PATCHES = (
     "0010-v4_11-rxbytes65-prefetch.patch",
     "0011-v4_12-overflow-fastpath.patch",
     "0012-v4_13-progress-poll.patch",
+    "0013-v4_14-preallocate-packet-before-irq.patch",
 )
-_CACHE_LAYOUT = b"shwm-wmbus-v4.13-progress-poll-v1\n"
+_CACHE_LAYOUT = b"shwm-wmbus-v4.14-prealloc-irq-v1\n"
 _SHIM_SENTINEL = "_shwm_wmbus_v4_bootstrap"
 
 
@@ -92,6 +93,8 @@ def _ready(components_root: Path, cache_root: Path, fingerprint: str) -> bool:
     return ("SHWM v4.12 RX FIFO overflow" in radio.read_text(encoding="utf-8")
             and "SHWM wMBus v4.12 ACTIVE" in component.read_text(encoding="utf-8")
             and "SHWM wMBus v4.13 ACTIVE" in component.read_text(encoding="utf-8")
+            and "SHWM wMBus v4.14 ACTIVE" in component.read_text(encoding="utf-8")
+            and "SHWM v4.14 packet preallocation" in component.read_text(encoding="utf-8")
             and "RX_DIAG_1M" in component.read_text(encoding="utf-8")
             and "SHWM v4.1 FIFO16 experiment" in radio.read_text(encoding="utf-8")
             and "CC1101_FIFOTHR, 0x03" in radio.read_text(encoding="utf-8")
@@ -170,6 +173,8 @@ def ensure_v4_components(repo_root: Path) -> Path:
                     "SHWM v4.13 post-drain polling" not in radio_text or
                     "SHWM wMBus v4.12 ACTIVE" not in (checkout / "components/wmbus_radio/component.cpp").read_text(encoding="utf-8") or
                     "SHWM wMBus v4.13 ACTIVE" not in (checkout / "components/wmbus_radio/component.cpp").read_text(encoding="utf-8") or
+                    "SHWM wMBus v4.14 ACTIVE" not in (checkout / "components/wmbus_radio/component.cpp").read_text(encoding="utf-8") or
+                    "SHWM v4.14 packet preallocation" not in (checkout / "components/wmbus_radio/component.cpp").read_text(encoding="utf-8") or
                     "RX_DIAG_1M" not in (checkout / "components/wmbus_radio/component.cpp").read_text(encoding="utf-8") or
                     "SHWM v4.9 MARCSTATE EOF confirmation" not in radio_text or
                     "confirm_marcstate_eof(" not in radio_text or
@@ -216,7 +221,7 @@ def ensure_v4_components(repo_root: Path) -> Path:
         if not _ready_except_manifest(components_root, cache_root):
             raise RuntimeError("wMBus v4 components did not pass post-install checks")
         (cache_root / "manifest.sha256").write_text(fingerprint + "\n", encoding="ascii")
-        _LOGGER.info("SHWM v4.13 post-drain polling experiment prepared; 200us backoff only on no-progress RX iterations; RF config unchanged.")
+        _LOGGER.info("SHWM v4.14 packet-before-IRQ experiment prepared; allocation moved before notification wait; RF config unchanged.")
         return cache_root
 
 
@@ -242,6 +247,8 @@ def _ready_except_manifest(components_root: Path, cache_root: Path) -> bool:
             and "SHWM v4.13 post-drain polling" in radio.read_text(encoding="utf-8")
             and "SHWM wMBus v4.12 ACTIVE" in component.read_text(encoding="utf-8")
             and "SHWM wMBus v4.13 ACTIVE" in component.read_text(encoding="utf-8")
+            and "SHWM wMBus v4.14 ACTIVE" in component.read_text(encoding="utf-8")
+            and "SHWM v4.14 packet preallocation" in component.read_text(encoding="utf-8")
             and "RX_DIAG_1M" in component.read_text(encoding="utf-8")
             and "SHWM v4.9 MARCSTATE EOF confirmation" in radio.read_text(encoding="utf-8")
             and "confirm_marcstate_eof(" in radio.read_text(encoding="utf-8")

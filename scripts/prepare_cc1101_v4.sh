@@ -32,7 +32,8 @@ for name in \
   0009-v4_10-five-minute-rx-diag.patch \
   0010-v4_11-rxbytes65-prefetch.patch \
   0011-v4_12-overflow-fastpath.patch \
-  0012-v4_13-progress-poll.patch; do
+  0012-v4_13-progress-poll.patch \
+  0013-v4_14-preallocate-packet-before-irq.patch; do
   git -C "$DEST" apply --check "$PATCHES/$name"
   git -C "$DEST" apply "$PATCHES/$name"
 done
@@ -57,6 +58,8 @@ grep -Fq 'SHWM v4.13 post-drain polling' "$RADIO"
 grep -Fq 'rx_should_backoff_after_drain(made_progress)' "$RADIO"
 grep -Fq 'SHWM wMBus v4.12 ACTIVE' "$DEST/components/wmbus_radio/component.cpp"
 grep -Fq 'SHWM wMBus v4.13 ACTIVE' "$DEST/components/wmbus_radio/component.cpp"
+grep -Fq 'SHWM wMBus v4.14 ACTIVE' "$DEST/components/wmbus_radio/component.cpp"
+grep -Fq 'SHWM v4.14 packet preallocation' "$DEST/components/wmbus_radio/component.cpp"
 grep -Fq 'SHWM v4.12 RX_DIAG_1M' "$DEST/components/wmbus_radio/component.cpp"
 grep -Fq 'RF_DIAG bytes=' "$RADIO"
 grep -Fq 'RX_DIAG cumulative' "$DEST/components/wmbus_radio/component.cpp"
@@ -68,8 +71,8 @@ grep -Fq 'BaseType_t xHigherPriorityTaskWoken = pdFALSE;' "$DEST/components/wmbu
 grep -Fq 'Key: [REDACTED]' "$METER"
 ! grep -Fq 'Key: %s' "$METER"
 
-echo "CC1101 v4.13 progress polling experiment prepared: $DEST/components"
+echo "CC1101 v4.14 preallocated packet experiment prepared: $DEST/components"
 echo "Pinned upstream: $PIN"
-echo "Radio BW: 325 kHz; RX FIFO threshold 16B; v4.9 MARCSTATE confirmation retained; RXBYTES=65 supported; only skip 200us delay after FIFO progress."
+echo "Radio BW: 325 kHz; RX FIFO threshold 16B; v4.9 MARCSTATE confirmation retained; RXBYTES=65 supported; v4.13 progress polling retained; packet constructed before IRQ wait."
 echo "Plaintext AES startup logging disabled. No YAML or firmware modified."
 git -C "$DEST" diff --stat
