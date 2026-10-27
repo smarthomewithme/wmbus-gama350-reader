@@ -30,6 +30,8 @@ for name in \
   git -C "$DEST" apply "$PATCHES/$name"
 done
 
+python3 "$ROOT/patches/0006-irq-header-diagnostics.py" "$DEST"
+
 git -C "$DEST" diff --check
 RADIO="$DEST/components/wmbus_radio/transceiver_cc1101.cpp"
 METER="$DEST/components/wmbus_meter/wmbus_meter.cpp"
@@ -40,10 +42,12 @@ grep -Fq 'CC1101_FIFOTHR, 0x03' "$RADIO"
 grep -Fq 'SHWM v4.1 FIFO16 experiment' "$RADIO"
 grep -Fq 'RF_DIAG bytes=' "$RADIO"
 grep -Fq 'RX_DIAG cumulative' "$DEST/components/wmbus_radio/component.cpp"
+grep -Fq 'RX_START_DIAG' "$DEST/components/wmbus_radio/component.cpp"
+grep -Fq 'SHWM v4.2 IRQ/header diagnostics enabled' "$DEST/components/wmbus_radio/component.cpp"
 grep -Fq 'Key: [REDACTED]' "$METER"
 ! grep -Fq 'Key: %s' "$METER"
 
-echo "CC1101 v4.1 FIFO16 experiment prepared: $DEST/components"
+echo "CC1101 v4.2 IRQ/header diagnostics prepared: $DEST/components"
 echo "Pinned upstream: $PIN"
 echo "Radio BW: 325 kHz; RX FIFO threshold 16B experiment; diagnostics v4 enabled."
 echo "Plaintext AES startup logging disabled. No YAML or firmware modified."
