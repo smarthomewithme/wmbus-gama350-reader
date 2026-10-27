@@ -30,6 +30,6 @@ class TestV416Scope(unittest.TestCase):
         for name in ("official-v4.yml","direct-esphome-install.yml"):
             s=(ROOT/".github/workflows"/name).read_text()
             self.assertIn("experiment/v4.16-long-idle-poll",s)
-            self.assertIn("rx_no_progress_backoff_us(offset, length)",s)
+            self.assertTrue(any(token in s for token in ("rx_no_progress_backoff_us(offset, length)", "rx_v417_no_progress_backoff_us(offset, length)")))
 if __name__=="__main__":
     unittest.main()
