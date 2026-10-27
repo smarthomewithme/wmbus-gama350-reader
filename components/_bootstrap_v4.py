@@ -29,7 +29,7 @@ _PATCHES = (
     "0005-experimental-fifo16-threshold.patch",
 )
 _DIAG_OVERLAY = "patches/0006-irq-header-diagnostics.py"
-_CACHE_LAYOUT = b"shwm-wmbus-v4.2-irq-header-diagnostics-v1\n"
+_CACHE_LAYOUT = b"shwm-wmbus-v4.3-passive-header-diagnostics-v1\n"
 _SHIM_SENTINEL = "_shwm_wmbus_v4_bootstrap"
 
 
@@ -92,8 +92,8 @@ def _ready(components_root: Path, cache_root: Path, fingerprint: str) -> bool:
             and "RF_DIAG bytes=" in radio.read_text(encoding="utf-8")
             and "Key: [REDACTED]" in meter.read_text(encoding="utf-8")
             and "RX_DIAG cumulative" in component.read_text(encoding="utf-8")
-            and "RX_START_DIAG" in component.read_text(encoding="utf-8")
-            and "SHWM v4.2 IRQ/header diagnostics enabled" in component.read_text(encoding="utf-8"))
+            and "RX_HEADER_DIAG" in component.read_text(encoding="utf-8")
+            and "SHWM v4.3 passive header diagnostics enabled" in component.read_text(encoding="utf-8"))
 
 
 def _restore_tracked_shims(repo_root: Path, components_root: Path) -> None:
@@ -154,7 +154,7 @@ def ensure_v4_components(repo_root: Path) -> Path:
                     "CC1101_FIFOTHR, 0x03" not in radio_text or
                     "CC1101_FIFOTHR, 0x07" in radio_text or
                     "SHWM v4.1 FIFO16 experiment" not in radio_text or
-                    "RX_START_DIAG" not in
+                    "RX_HEADER_DIAG" not in
                     (checkout / "components/wmbus_radio/component.cpp").read_text(encoding="utf-8") or
                     "RX_DIAG cumulative" not in
                     (checkout / "components/wmbus_radio/component.cpp").read_text(encoding="utf-8") or
@@ -181,7 +181,7 @@ def ensure_v4_components(repo_root: Path) -> Path:
         if not _ready_except_manifest(components_root, cache_root):
             raise RuntimeError("wMBus v4 components did not pass post-install checks")
         (cache_root / "manifest.sha256").write_text(fingerprint + "\n", encoding="ascii")
-        _LOGGER.info("CC1101 v4.2 IRQ/header diagnostics ready; FIFO16 preserved; AES keys redacted.")
+        _LOGGER.info("CC1101 v4.3 passive header diagnostics ready; FIFO16 preserved; AES keys redacted.")
         return cache_root
 
 
@@ -204,4 +204,4 @@ def _ready_except_manifest(components_root: Path, cache_root: Path) -> bool:
             and "RX_DIAG cumulative" in component.read_text(encoding="utf-8")
             and "Key: [REDACTED]" in meter.read_text(encoding="utf-8")
             and "CC1101_FIFOTHR, 0x03" in radio.read_text(encoding="utf-8")
-            and "RX_START_DIAG" in component.read_text(encoding="utf-8"))
+            and "RX_HEADER_DIAG" in component.read_text(encoding="utf-8"))
