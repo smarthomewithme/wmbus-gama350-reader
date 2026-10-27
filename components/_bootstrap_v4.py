@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 
 from filelock import FileLock
@@ -27,7 +28,8 @@ _PATCHES = (
     "0004-radio-diagnostics-and-key-redaction.patch",
     "0005-experimental-fifo16-threshold.patch",
 )
-_CACHE_LAYOUT = b"shwm-wmbus-v4.1-fifo16-isolated-experiment-v1\n"
+_DIAG_OVERLAY = "patches/0006-irq-header-diagnostics.py"
+_CACHE_LAYOUT = b"shwm-wmbus-v4.2-irq-header-diagnostics-v1\n"
 _SHIM_SENTINEL = "_shwm_wmbus_v4_bootstrap"
 
 
@@ -57,6 +59,11 @@ def _fingerprint(repo_root: Path) -> str:
             raise RuntimeError(f"Missing required CC1101 patch: {name}")
         digest.update(name.encode("ascii"))
         digest.update(patch.read_bytes())
+    overlay = repo_root / _DIAG_OVERLAY
+    if not overlay.is_file():
+        raise RuntimeError("Missing v4.2 IRQ/header diagnostic overlay")
+    digest.update(_DIAG_OVERLAY.encode("ascii"))
+    digest.update(overlay.read_bytes())
     return digest.hexdigest()
 
 
@@ -84,7 +91,9 @@ def _ready(components_root: Path, cache_root: Path, fingerprint: str) -> bool:
             and "CC1101_FIFOTHR, 0x03" in radio.read_text(encoding="utf-8")
             and "RF_DIAG bytes=" in radio.read_text(encoding="utf-8")
             and "Key: [REDACTED]" in meter.read_text(encoding="utf-8")
-            and "RX_DIAG cumulative" in component.read_text(encoding="utf-8"))
+            and "RX_DIAG cumulative" in component.read_text(encoding="utf-8")
+            and "RX_START_DIAG" in component.read_text(encoding="utf-8")
+            and "SHWM v4.2 IRQ/header diagnostics enabled" in component.read_text(encoding="utf-8"))
 
 
 def _restore_tracked_shims(repo_root: Path, components_root: Path) -> None:
@@ -132,6 +141,7 @@ def ensure_v4_components(repo_root: Path) -> Path:
                 patch = str(repo_root / "patches" / name)
                 _run(["git", "apply", "--check", patch], cwd=checkout)
                 _run(["git", "apply", patch], cwd=checkout)
+            _run([sys.executable, str(repo_root / _DIAG_OVERLAY), str(checkout)])
             _run(["git", "diff", "--check"], cwd=checkout)
 
             radio = (checkout / "components/wmbus_radio/transceiver_cc1101.cpp")
@@ -144,6 +154,8 @@ def ensure_v4_components(repo_root: Path) -> Path:
                     "CC1101_FIFOTHR, 0x03" not in radio_text or
                     "CC1101_FIFOTHR, 0x07" in radio_text or
                     "SHWM v4.1 FIFO16 experiment" not in radio_text or
+                    "RX_START_DIAG" not in
+                    (checkout / "components/wmbus_radio/component.cpp").read_text(encoding="utf-8") or
                     "RX_DIAG cumulative" not in
                     (checkout / "components/wmbus_radio/component.cpp").read_text(encoding="utf-8") or
                     "Key: [REDACTED]" not in meter_text or
@@ -169,7 +181,7 @@ def ensure_v4_components(repo_root: Path) -> Path:
         if not _ready_except_manifest(components_root, cache_root):
             raise RuntimeError("wMBus v4 components did not pass post-install checks")
         (cache_root / "manifest.sha256").write_text(fingerprint + "\n", encoding="ascii")
-        _LOGGER.info("CC1101 v4.1 FIFO16 experimental components ready; AES startup keys redacted.")
+        _LOGGER.info("CC1101 v4.2 IRQ/header diagnostics ready; FIFO16 preserved; AES keys redacted.")
         return cache_root
 
 
@@ -191,4 +203,5 @@ def _ready_except_manifest(components_root: Path, cache_root: Path) -> bool:
             and "RF_DIAG bytes=" in radio.read_text(encoding="utf-8")
             and "RX_DIAG cumulative" in component.read_text(encoding="utf-8")
             and "Key: [REDACTED]" in meter.read_text(encoding="utf-8")
-            and "CC1101_FIFOTHR, 0x03" in radio.read_text(encoding="utf-8"))
+            and "CC1101_FIFOTHR, 0x03" in radio.read_text(encoding="utf-8")
+            and "RX_START_DIAG" in component.read_text(encoding="utf-8"))
