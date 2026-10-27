@@ -43,7 +43,7 @@ class TestV411Prefetch(unittest.TestCase):
             offsets = [source.index(name) for name in names]
             self.assertEqual(offsets, sorted(offsets))
         # The active cache layout always belongs to the newest experimental revision.
-        self.assertIn("shwm-wmbus-v4.16-long-idle-poll-v1", b)
+        self.assertIn("shwm-wmbus-v4.17-midpoint-long-poll-v1", b)
         self.assertIn("kCc1101MaxReportedRxBytes = 65", b)
         self.assertIn("kCc1101MaxReportedRxBytes = 65", sh)
 

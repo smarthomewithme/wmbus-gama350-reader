@@ -35,8 +35,9 @@ _PATCHES = (
     "0012-v4_13-progress-poll.patch",
     "0013-v4_14-preallocate-packet-before-irq.patch",
     "0014-v4_16-long-no-progress-short-poll.patch",
+    "0015-v4_17-midpoint-long-idle-poll.patch",
 )
-_CACHE_LAYOUT = b"shwm-wmbus-v4.16-long-idle-poll-v1\n"
+_CACHE_LAYOUT = b"shwm-wmbus-v4.17-midpoint-long-poll-v1\n"
 _SHIM_SENTINEL = "_shwm_wmbus_v4_bootstrap"
 
 
@@ -96,6 +97,7 @@ def _ready(components_root: Path, cache_root: Path, fingerprint: str) -> bool:
             and "SHWM wMBus v4.13 ACTIVE" in component.read_text(encoding="utf-8")
             and "SHWM wMBus v4.14 ACTIVE" in component.read_text(encoding="utf-8")
             and "SHWM wMBus v4.16 ACTIVE" in component.read_text(encoding="utf-8")
+            and "SHWM wMBus v4.17 ACTIVE" in component.read_text(encoding="utf-8")
             and "SHWM v4.14 packet preallocation" in component.read_text(encoding="utf-8")
             and "RX_DIAG_1M" in component.read_text(encoding="utf-8")
             and "SHWM v4.1 FIFO16 experiment" in radio.read_text(encoding="utf-8")
@@ -108,7 +110,7 @@ def _ready(components_root: Path, cache_root: Path, fingerprint: str) -> bool:
             and "rx_fifo_count_plausible(available)" in radio.read_text(encoding="utf-8")
             and "rx_fifo_complete_read(" in radio.read_text(encoding="utf-8")
             and "rx_should_backoff_after_drain(made_progress)" in radio.read_text(encoding="utf-8")
-            and "rx_no_progress_backoff_us(offset, length)" in radio.read_text(encoding="utf-8")
+            and "rx_v417_no_progress_backoff_us(offset, length)" in radio.read_text(encoding="utf-8")
             and "Key: [REDACTED]" in meter.read_text(encoding="utf-8")
             and "RX_DIAG cumulative" in component.read_text(encoding="utf-8")
             and "SHWM v4.10 RX_DIAG_5M" in component.read_text(encoding="utf-8")
@@ -178,6 +180,7 @@ def ensure_v4_components(repo_root: Path) -> Path:
                     "SHWM wMBus v4.13 ACTIVE" not in (checkout / "components/wmbus_radio/component.cpp").read_text(encoding="utf-8") or
                     "SHWM wMBus v4.14 ACTIVE" not in (checkout / "components/wmbus_radio/component.cpp").read_text(encoding="utf-8") or
                     "SHWM wMBus v4.16 ACTIVE" not in (checkout / "components/wmbus_radio/component.cpp").read_text(encoding="utf-8") or
+                    "SHWM wMBus v4.17 ACTIVE" not in (checkout / "components/wmbus_radio/component.cpp").read_text(encoding="utf-8") or
                     "SHWM v4.14 packet preallocation" not in (checkout / "components/wmbus_radio/component.cpp").read_text(encoding="utf-8") or
                     "RX_DIAG_1M" not in (checkout / "components/wmbus_radio/component.cpp").read_text(encoding="utf-8") or
                     "SHWM v4.9 MARCSTATE EOF confirmation" not in radio_text or
@@ -189,7 +192,7 @@ def ensure_v4_components(repo_root: Path) -> Path:
                     "rx_fifo_count_plausible(available)" not in radio_text or
                     "rx_fifo_complete_read(" not in radio_text or
                     "rx_should_backoff_after_drain(made_progress)" not in radio_text or
-                    "rx_no_progress_backoff_us(offset, length)" not in radio_text or
+                    "rx_v417_no_progress_backoff_us(offset, length)" not in radio_text or
                     "CC1101_FIFOTHR, 0x03" not in radio_text or
                     "CC1101_FIFOTHR, 0x07" in radio_text or
                     "SHWM v4.1 FIFO16 experiment" not in radio_text or
@@ -226,7 +229,7 @@ def ensure_v4_components(repo_root: Path) -> Path:
         if not _ready_except_manifest(components_root, cache_root):
             raise RuntimeError("wMBus v4 components did not pass post-install checks")
         (cache_root / "manifest.sha256").write_text(fingerprint + "\n", encoding="ascii")
-        _LOGGER.info("SHWM v4.16 long idle poll prepared from v4.14; 50us no-progress only, 100us unstable wait retained; RF unchanged.")
+        _LOGGER.info("SHWM v4.17 midpoint long poll prepared from v4.16; 100us no-progress, 100us unstable wait retained; RF unchanged.")
         return cache_root
 
 
@@ -254,6 +257,7 @@ def _ready_except_manifest(components_root: Path, cache_root: Path) -> bool:
             and "SHWM wMBus v4.13 ACTIVE" in component.read_text(encoding="utf-8")
             and "SHWM wMBus v4.14 ACTIVE" in component.read_text(encoding="utf-8")
             and "SHWM wMBus v4.16 ACTIVE" in component.read_text(encoding="utf-8")
+            and "SHWM wMBus v4.17 ACTIVE" in component.read_text(encoding="utf-8")
             and "SHWM v4.14 packet preallocation" in component.read_text(encoding="utf-8")
             and "RX_DIAG_1M" in component.read_text(encoding="utf-8")
             and "SHWM v4.9 MARCSTATE EOF confirmation" in radio.read_text(encoding="utf-8")
@@ -263,7 +267,7 @@ def _ready_except_manifest(components_root: Path, cache_root: Path) -> bool:
             and "rx_fifo_count_plausible(available)" in radio.read_text(encoding="utf-8")
             and "rx_fifo_complete_read(" in radio.read_text(encoding="utf-8")
             and "rx_should_backoff_after_drain(made_progress)" in radio.read_text(encoding="utf-8")
-            and "rx_no_progress_backoff_us(offset, length)" in radio.read_text(encoding="utf-8")
+            and "rx_v417_no_progress_backoff_us(offset, length)" in radio.read_text(encoding="utf-8")
             and "RX_DIAG cumulative" in component.read_text(encoding="utf-8")
             and "SHWM v4.10 RX_DIAG_5M" in component.read_text(encoding="utf-8")
             and "frame_conversion_failed_" in component.read_text(encoding="utf-8")
