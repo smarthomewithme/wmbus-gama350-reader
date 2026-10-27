@@ -1,0 +1,10 @@
+diff --git a/components/wmbus_radio/component.cpp b/components/wmbus_radio/component.cpp
+--- a/components/wmbus_radio/component.cpp
++++ b/components/wmbus_radio/component.cpp
+@@ -81,5 +81,5 @@ void Radio::wakeup_receiver_task_from_isr(TaskHandle_t *arg) {
+ void Radio::wakeup_receiver_task_from_isr(TaskHandle_t *arg) {
+-  BaseType_t xHigherPriorityTaskWoken;
++  BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+   vTaskNotifyGiveFromISR(*arg, &xHigherPriorityTaskWoken);
+   portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+ }

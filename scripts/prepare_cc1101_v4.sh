@@ -26,7 +26,8 @@ for name in \
   0003-cc1101-stable-rxbytes.patch \
   0004-radio-diagnostics-and-key-redaction.patch \
   0005-experimental-fifo16-threshold.patch \
-  0006-v4_4-clear-stale-irq.patch; do
+  0006-v4_4-clear-stale-irq.patch \
+  0007-v4_5-initialize-isr-woken.patch; do
   git -C "$DEST" apply --check "$PATCHES/$name"
   git -C "$DEST" apply "$PATCHES/$name"
 done
@@ -42,11 +43,12 @@ grep -Fq 'SHWM v4.1 FIFO16 experiment' "$RADIO"
 grep -Fq 'RF_DIAG bytes=' "$RADIO"
 grep -Fq 'RX_DIAG cumulative' "$DEST/components/wmbus_radio/component.cpp"
 grep -Fq 'SHWM v4.4 stale IRQ clear' "$DEST/components/wmbus_radio/component.cpp"
+grep -Fq 'BaseType_t xHigherPriorityTaskWoken = pdFALSE;' "$DEST/components/wmbus_radio/component.cpp"
 grep -Fq 'Key: [REDACTED]' "$METER"
 ! grep -Fq 'Key: %s' "$METER"
 
-echo "CC1101 v4.4 stale IRQ experiment prepared: $DEST/components"
+echo "CC1101 v4.5 ISR woken init experiment prepared: $DEST/components"
 echo "Pinned upstream: $PIN"
-echo "Radio BW: 325 kHz; RX FIFO threshold 16B; stale notifications cleared before RX re-arm."
+echo "Radio BW: 325 kHz; RX FIFO threshold 16B; stale IRQ notifications cleared; ISR woken flag initialized to pdFALSE."
 echo "Plaintext AES startup logging disabled. No YAML or firmware modified."
 git -C "$DEST" diff --stat
