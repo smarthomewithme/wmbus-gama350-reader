@@ -35,6 +35,9 @@ jobs:
           assert driver.count('this->write_register(CC1101_FIFOTHR, 0x03);') == 1
           assert 'this->write_register(CC1101_FIFOTHR, 0x07);' not in driver
           assert 'SHWM v4.1 FIFO16 experiment' in driver
+          assert 'SHWM v4.2 IRQ/header diagnostics enabled' in radio
+          assert 'RX_START_DIAG' in radio
+          assert 'irq_lag_samples_' in hdr
           assert 'RF_DIAG bytes=' in driver
           assert 'unstable_rxbytes=' in driver
           assert 'RX_DIAG cumulative' in radio
