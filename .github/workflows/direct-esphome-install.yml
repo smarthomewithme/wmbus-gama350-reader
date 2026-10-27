@@ -93,7 +93,7 @@ jobs:
                      and 'BaseType_t xHigherPriorityTaskWoken;' not in p.read_text()
                      and 'RX_DIAG v4.7 loop_only' in p.read_text()
                      for p in radio_sources)
-          assert list(Path('config').rglob('loop_gap_observer.h')), 'No prepared v4.7 observer header', [str(p) for p in radio_sources]
+          assert list(Path('config').rglob('loop_gap_observer.h')), 'No prepared v4.7 observer header'
           PY
       - name: Validate a second time with refresh always
         run: |
