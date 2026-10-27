@@ -1,0 +1,114 @@
+diff --git a/components/wmbus_radio/cc1101_fifo.h b/components/wmbus_radio/cc1101_fifo.h
+--- a/components/wmbus_radio/cc1101_fifo.h
++++ b/components/wmbus_radio/cc1101_fifo.h
+@@ -33,6 +33,14 @@
+   return remaining < kCc1101PhysicalFifoBytes ? remaining : kCc1101PhysicalFifoBytes;
+ }
+ 
++// Probe MARCSTATE only after a no-progress iteration. A successful FIFO
++// burst proves we can continue draining; delaying status SPI reduces RX lag.
++inline constexpr bool rx_should_probe_marcstate(bool made_progress,
++                                                std::size_t received,
++                                                std::size_t requested) {
++  return !made_progress && received > 0 && received < requested;
++}
++
+ // CC1101 RXBYTES is asynchronous to SPI. Require two consecutive equal reads.
+ // Bound attempts so bad samples cannot block the high-priority receiver task.
+ template <typename ReadStatus>
+diff --git a/components/wmbus_radio/component.cpp b/components/wmbus_radio/component.cpp
+--- a/components/wmbus_radio/component.cpp
++++ b/components/wmbus_radio/component.cpp
+@@ -33,6 +33,7 @@
+ #endif
+ 
+   this->last_diag_log_ms_ = millis();
++  ESP_LOGI(TAG, "SHWM wMBus v4.12 ACTIVE: one-shot overflow recovery; fast FIFO polling");
+   ESP_LOGI(TAG, "Receiver task created [%p]", this->receiver_task_handle_);
+ 
+   this->radio->attach_data_interrupt(Radio::wakeup_receiver_task_from_isr,
+@@ -41,9 +42,9 @@
+ 
+ void Radio::loop() {
+   // GPIO4 interrupts indicate the FIFO threshold, not a confirmed meter.
+-  // SHWM v4.10 RX_DIAG_5M: main-loop snapshot; zero extra work in radio ISR/task.
++  // SHWM v4.10 RX_DIAG_5M retained; v4.12 reports 1-minute windows.
+   const uint32_t now = millis();
+-  if ((uint32_t) (now - this->last_diag_log_ms_) >= 300000u) {
++  if ((uint32_t) (now - this->last_diag_log_ms_) >= 60000u) {
+     const uint32_t window_ms = (uint32_t) (now - this->last_diag_log_ms_);
+     this->last_diag_log_ms_ = now;
+     const RxDiagSnapshot current{
+@@ -59,7 +60,7 @@
+     };
+     const RxDiagSnapshot window = rx_diag_delta(current, this->last_diag_window_);
+     this->last_diag_window_ = current;
+-    ESP_LOGI(TAG, "RX_DIAG_5M window_ms=%lu irq=%lu header_ok=%lu header_fail=%lu payload_ok=%lu payload_fail=%lu long_frames=%lu frame_ok=%lu frame_fail=%lu queue_drops=%lu",
++    ESP_LOGI(TAG, "SHWM v4.12 RX_DIAG_1M window_ms=%lu irq=%lu header_ok=%lu header_fail=%lu payload_ok=%lu payload_fail=%lu long_frames=%lu frame_ok=%lu frame_fail=%lu queue_drops=%lu",
+              (unsigned long) window_ms,
+              (unsigned long) window.irq_notifications,
+              (unsigned long) window.headers_ok,
+diff --git a/components/wmbus_radio/transceiver_cc1101.cpp b/components/wmbus_radio/transceiver_cc1101.cpp
+--- a/components/wmbus_radio/transceiver_cc1101.cpp
++++ b/components/wmbus_radio/transceiver_cc1101.cpp
+@@ -299,8 +299,10 @@
+       continue;
+     }
+     if (rxbytes_raw & 0x80) {
+-      ESP_LOGW(TAG, "RX FIFO overflow");
+-      this->restart_rx();
++      // v4.12: single recovery in Radio::receive_frame(), no nested SIDLE/SFRX/SRX.
++      ESP_LOGW(TAG, "SHWM v4.12 RX FIFO overflow: offset=%lu received=%lu/%lu raw=0x%02X ms=%lu",
++               (unsigned long) offset, (unsigned long) total, (unsigned long) length,
++               (unsigned) rxbytes_raw, (unsigned long) (millis() - started_at));
+       return false;
+     }
+ 
+@@ -313,6 +315,7 @@
+       return false;
+     }
+ 
++    bool made_progress = false;
+     if (available > 0) {
+       // Preserve a byte during the header and all incomplete payload chunks.
+       // This works around the CC1101 FIFO last-byte erratum.
+@@ -328,8 +331,9 @@
+           confirmed = 0;  // Never drain on an inconsistent count.
+         }
+         if (confirmed & 0x80) {
+-          ESP_LOGW(TAG, "RX FIFO overflow during final chunk");
+-          this->restart_rx();
++          ESP_LOGW(TAG, "SHWM v4.12 RX FIFO overflow final: offset=%lu received=%lu/%lu raw=0x%02X ms=%lu",
++                   (unsigned long) offset, (unsigned long) total, (unsigned long) length,
++                   (unsigned) confirmed, (unsigned long) (millis() - started_at));
+           return false;
+         }
+         to_read = rx_fifo_complete_read(confirmed & 0x7F, remaining);
+@@ -346,12 +350,14 @@
+           burst_count++;
+         }
+         total += to_read;
++        made_progress = true;
+         last_progress = millis();
+       }
+     }
+ 
+-    // Check end-of-packet via MARCSTATE (IDLE or RX_END = packet done)
+-    if (total > 0 && total < length) {
++    // v4.12: skip the costly MARCSTATE SPI read when FIFO made progress.
++    // The next loop checks EOF as soon as no safe FIFO bytes can be drained.
++    if (rx_should_probe_marcstate(made_progress, total, length)) {
+       uint8_t marcstate = this->read_status_register(CC1101_MARCSTATE) & 0x1F;
+       // SHWM v4.9 MARCSTATE EOF confirmation: don't trust one active-RX read.
+       const auto is_terminal = [](uint8_t state) {
+@@ -367,7 +373,9 @@
+         if (!stable_rxbytes(final_raw)) {
+           unstable_rxbytes++;
+         } else if (final_raw & 0x80) {
+-          ESP_LOGW(TAG, "RX FIFO overflow on final drain");
++          ESP_LOGW(TAG, "SHWM v4.12 RX FIFO overflow EOF: offset=%lu received=%lu/%lu raw=0x%02X",
++                   (unsigned long) offset, (unsigned long) total, (unsigned long) length,
++                   (unsigned) final_raw);
+           return false;
+         } else {
+           const size_t final_bytes = final_raw & 0x7F;

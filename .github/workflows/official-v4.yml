@@ -1,7 +1,7 @@
 name: Official CC1101 v4 validation (no flash)
 on:
   push:
-    branches: [release/v4-radio-diagnostics, experiment/v4.4-stale-irq-clear, experiment/v4.5-isr-woken-init, experiment/v4.9-stable-marcstate-eof, experiment/v4.10-five-minute-rx-diag, experiment/v4.11-rxbytes65-prefetch, main]
+    branches: [release/v4-radio-diagnostics, experiment/v4.4-stale-irq-clear, experiment/v4.5-isr-woken-init, experiment/v4.9-stable-marcstate-eof, experiment/v4.10-five-minute-rx-diag, experiment/v4.11-rxbytes65-prefetch, experiment/v4.12-overflow-fastpath, main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -19,7 +19,7 @@ jobs:
           python-version: '3.12'
       - name: Run native regression tests
         run: bash scripts/test.sh
-      - name: Prepare pinned upstream plus ten patches (v4.9 + v4.10 + v4.11)
+      - name: Prepare pinned upstream plus eleven patches (v4.9-v4.12)
         run: bash scripts/prepare_cc1101_v4.sh
       - name: Verify release integrity
         run: |
@@ -41,6 +41,11 @@ jobs:
           assert 'rx_fifo_count_plausible(available)' in driver
           assert 'rx_fifo_incomplete_read(' in driver
           assert 'rx_fifo_complete_read(' in driver
+          assert 'rx_should_probe_marcstate(' in driver
+          assert 'SHWM v4.12 RX FIFO overflow' in driver
+          assert 'SHWM wMBus v4.12 ACTIVE' in radio
+          assert 'SHWM v4.12 RX_DIAG_1M' in radio
+          assert 'inline constexpr bool rx_should_probe_marcstate(' in (src/'wmbus_radio/cc1101_fifo.h').read_text()
           assert 'kCc1101MaxReportedRxBytes = 65' in (src/'wmbus_radio/cc1101_fifo.h').read_text()
           assert 'inline bool confirm_marcstate_eof(' in (src/'wmbus_radio/cc1101_fifo.h').read_text()
           assert 'unstable_rxbytes=' in driver
@@ -86,6 +91,12 @@ jobs:
             -I vendor/cc1101_v4/components/wmbus_radio \
             tests/v411_fifo_prefetch.cpp -o /tmp/shwm-v411-fifo-test
           ASAN_OPTIONS=detect_leaks=0 /tmp/shwm-v411-fifo-test
+      - name: Test v4.12 MARCSTATE scheduling policy (native ASan/UBSan)
+        run: |
+          g++ -std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=address,undefined -fno-omit-frame-pointer \
+            -I vendor/cc1101_v4/components/wmbus_radio \
+            tests/v412_receive_policy.cpp -o /tmp/shwm-v412-receive-test
+          ASAN_OPTIONS=detect_leaks=0 /tmp/shwm-v412-receive-test
       - name: Generate isolated CI config and synthetic secrets
         run: |
           python - <<'PY'
