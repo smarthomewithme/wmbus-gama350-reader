@@ -28,8 +28,9 @@ _PATCHES = (
     "0005-experimental-fifo16-threshold.patch",
     "0006-v4_4-clear-stale-irq.patch",
     "0007-v4_5-initialize-isr-woken.patch",
+    "0008-v4_9-confirm-marcstate-eof.patch",
 )
-_CACHE_LAYOUT = b"shwm-wmbus-v4.5-isr-woken-init-v1\n"
+_CACHE_LAYOUT = b"shwm-wmbus-v4.9-stable-marcstate-eof-v1\n"
 _SHIM_SENTINEL = "_shwm_wmbus_v4_bootstrap"
 
 
@@ -80,11 +81,15 @@ def _ready(components_root: Path, cache_root: Path, fingerprint: str) -> bool:
     radio = components_root / "wmbus_radio" / "transceiver_cc1101.cpp"
     meter = components_root / "wmbus_meter" / "wmbus_meter.cpp"
     component = components_root / "wmbus_radio" / "component.cpp"
-    if not all(p.is_file() for p in (radio, meter, component)):
+    fifo = components_root / "wmbus_radio" / "cc1101_fifo.h"
+    if not all(p.is_file() for p in (radio, meter, component, fifo)):
         return False
     return ("SHWM v4.1 FIFO16 experiment" in radio.read_text(encoding="utf-8")
             and "CC1101_FIFOTHR, 0x03" in radio.read_text(encoding="utf-8")
             and "RF_DIAG bytes=" in radio.read_text(encoding="utf-8")
+            and "SHWM v4.9 MARCSTATE EOF confirmation" in radio.read_text(encoding="utf-8")
+            and "confirm_marcstate_eof(" in radio.read_text(encoding="utf-8")
+            and "inline bool confirm_marcstate_eof(" in fifo.read_text(encoding="utf-8")
             and "Key: [REDACTED]" in meter.read_text(encoding="utf-8")
             and "RX_DIAG cumulative" in component.read_text(encoding="utf-8")
             and "SHWM v4.4 stale IRQ clear" in component.read_text(encoding="utf-8")
@@ -145,6 +150,10 @@ def ensure_v4_components(repo_root: Path) -> Path:
             if ('this->write_register(CC1101_MDMCFG4, 0x5C);' not in radio_text or
                     'this->write_register(CC1101_MDMCFG4, 0x6C);' in radio_text or
                     "RF_DIAG bytes=" not in radio_text or
+                    "SHWM v4.9 MARCSTATE EOF confirmation" not in radio_text or
+                    "confirm_marcstate_eof(" not in radio_text or
+                    "inline bool confirm_marcstate_eof(" not in
+                    (checkout / "components/wmbus_radio/cc1101_fifo.h").read_text(encoding="utf-8") or
                     "CC1101_FIFOTHR, 0x03" not in radio_text or
                     "CC1101_FIFOTHR, 0x07" in radio_text or
                     "SHWM v4.1 FIFO16 experiment" not in radio_text or
@@ -177,7 +186,7 @@ def ensure_v4_components(repo_root: Path) -> Path:
         if not _ready_except_manifest(components_root, cache_root):
             raise RuntimeError("wMBus v4 components did not pass post-install checks")
         (cache_root / "manifest.sha256").write_text(fingerprint + "\n", encoding="ascii")
-        _LOGGER.info("CC1101 v4.5 ISR woken initialization experiment ready; v4.4 stale IRQ clear and FIFO16 preserved; AES keys redacted.")
+        _LOGGER.info("CC1101 v4.9 MARCSTATE EOF confirmation experiment ready; exact v4.5 FIFO16/ISR baseline preserved; AES keys redacted.")
         return cache_root
 
 
@@ -195,8 +204,12 @@ def _ready_except_manifest(components_root: Path, cache_root: Path) -> bool:
     radio = components_root / "wmbus_radio" / "transceiver_cc1101.cpp"
     component = components_root / "wmbus_radio" / "component.cpp"
     meter = components_root / "wmbus_meter" / "wmbus_meter.cpp"
-    return (all(p.is_file() for p in (radio, component, meter))
+    fifo = components_root / "wmbus_radio" / "cc1101_fifo.h"
+    return (all(p.is_file() for p in (radio, component, meter, fifo))
             and "RF_DIAG bytes=" in radio.read_text(encoding="utf-8")
+            and "SHWM v4.9 MARCSTATE EOF confirmation" in radio.read_text(encoding="utf-8")
+            and "confirm_marcstate_eof(" in radio.read_text(encoding="utf-8")
+            and "inline bool confirm_marcstate_eof(" in fifo.read_text(encoding="utf-8")
             and "RX_DIAG cumulative" in component.read_text(encoding="utf-8")
             and "SHWM v4.4 stale IRQ clear" in component.read_text(encoding="utf-8")
             and "BaseType_t xHigherPriorityTaskWoken = pdFALSE;" in component.read_text(encoding="utf-8")

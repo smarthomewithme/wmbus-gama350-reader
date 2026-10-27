@@ -27,7 +27,8 @@ for name in \
   0004-radio-diagnostics-and-key-redaction.patch \
   0005-experimental-fifo16-threshold.patch \
   0006-v4_4-clear-stale-irq.patch \
-  0007-v4_5-initialize-isr-woken.patch; do
+  0007-v4_5-initialize-isr-woken.patch \
+  0008-v4_9-confirm-marcstate-eof.patch; do
   git -C "$DEST" apply --check "$PATCHES/$name"
   git -C "$DEST" apply "$PATCHES/$name"
 done
@@ -40,6 +41,9 @@ grep -Fq 'this->write_register(CC1101_MDMCFG4, 0x5C);' "$RADIO"
 grep -Fq 'CC1101_FIFOTHR, 0x03' "$RADIO"
 ! grep -Fq 'CC1101_FIFOTHR, 0x07' "$RADIO"
 grep -Fq 'SHWM v4.1 FIFO16 experiment' "$RADIO"
+grep -Fq 'SHWM v4.9 MARCSTATE EOF confirmation' "$RADIO"
+grep -Fq 'confirm_marcstate_eof(' "$RADIO"
+grep -Fq 'inline bool confirm_marcstate_eof(' "$DEST/components/wmbus_radio/cc1101_fifo.h"
 grep -Fq 'RF_DIAG bytes=' "$RADIO"
 grep -Fq 'RX_DIAG cumulative' "$DEST/components/wmbus_radio/component.cpp"
 grep -Fq 'SHWM v4.4 stale IRQ clear' "$DEST/components/wmbus_radio/component.cpp"
@@ -47,8 +51,8 @@ grep -Fq 'BaseType_t xHigherPriorityTaskWoken = pdFALSE;' "$DEST/components/wmbu
 grep -Fq 'Key: [REDACTED]' "$METER"
 ! grep -Fq 'Key: %s' "$METER"
 
-echo "CC1101 v4.5 ISR woken init experiment prepared: $DEST/components"
+echo "CC1101 v4.9 MARCSTATE EOF confirmation experiment prepared: $DEST/components"
 echo "Pinned upstream: $PIN"
-echo "Radio BW: 325 kHz; RX FIFO threshold 16B; stale IRQ notifications cleared; ISR woken flag initialized to pdFALSE."
+echo "Radio BW: 325 kHz; RX FIFO threshold 16B; v4.5 ISR baseline and stale IRQ handling unchanged; confirmed terminal MARCSTATE only."
 echo "Plaintext AES startup logging disabled. No YAML or firmware modified."
 git -C "$DEST" diff --stat

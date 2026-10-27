@@ -1,0 +1,50 @@
+diff --git a/components/wmbus_radio/cc1101_fifo.h b/components/wmbus_radio/cc1101_fifo.h
+--- a/components/wmbus_radio/cc1101_fifo.h
++++ b/components/wmbus_radio/cc1101_fifo.h
+@@ -18,7 +18,28 @@
+     previous = current;
+   }
+   return false;
+ }
+ 
++// SHWM v4.9: active RX can return a transient MARCSTATE (SWRZ020E).
++// Only a suspicious end state gets extra SPI reads; never delay normal RX.
++// Require two consecutive identical terminal samples, within three retries.
++// An intermediate non-terminal state cancels the proposed end immediately.
++template <typename ReadStatus, typename IsTerminal>
++inline bool confirm_marcstate_eof(uint8_t first, ReadStatus read_status,
++                                  IsTerminal is_terminal) {
++  if (!is_terminal(first))
++    return false;
++  uint8_t previous = first;
++  for (unsigned int attempt = 0; attempt < 3; ++attempt) {
++    const uint8_t current = read_status();
++    if (!is_terminal(current))
++      return false;
++    if (current == previous)
++      return true;
++    previous = current;
++  }
++  return false;
++}
++
+ }  // namespace wmbus_radio
+ }  // namespace esphome
+diff --git a/components/wmbus_radio/transceiver_cc1101.cpp b/components/wmbus_radio/transceiver_cc1101.cpp
+--- a/components/wmbus_radio/transceiver_cc1101.cpp
++++ b/components/wmbus_radio/transceiver_cc1101.cpp
+@@ -364,5 +364,13 @@
+     // Check end-of-packet via MARCSTATE (IDLE or RX_END = packet done)
+     if (total > 0 && total < length) {
+       uint8_t marcstate = this->read_status_register(CC1101_MARCSTATE) & 0x1F;
+-      if (marcstate == CC1101_MARCSTATE_IDLE || marcstate == CC1101_MARCSTATE_RX_END) {
++      // SHWM v4.9 MARCSTATE EOF confirmation: don't trust one active-RX read.
++      const auto is_terminal = [](uint8_t state) {
++        return state == CC1101_MARCSTATE_IDLE || state == CC1101_MARCSTATE_RX_END;
++      };
++      if (is_terminal(marcstate) &&
++          confirm_marcstate_eof(
++              marcstate,
++              [this]() { return this->read_status_register(CC1101_MARCSTATE) & 0x1F; },
++              is_terminal)) {
+         // Packet finished, drain remaining FIFO
