@@ -39,6 +39,8 @@ with tempfile.TemporaryDirectory(prefix="wmbus-v4-refresh-test-") as temp:
     for patch_name in module._PATCHES:
         shutil.copy2(REPOSITORY / "patches" / patch_name,
                      root / "patches" / patch_name)
+    shutil.copy2(REPOSITORY / module._DIAG_OVERLAY,
+                 root / module._DIAG_OVERLAY)
 
     component_root = root / "components"
     cache = component_root / ".shwm_v4_cache"
