@@ -1,7 +1,7 @@
 name: Official CC1101 v4 validation (no flash)
 on:
   push:
-    branches: [release/v4-radio-diagnostics, experiment/v4.4-stale-irq-clear, experiment/v4.5-isr-woken-init, main]
+    branches: [release/v4-radio-diagnostics, experiment/v4.4-stale-irq-clear, experiment/v4.5-isr-woken-init, experiment/v4.7-loop-gap-observer, main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -19,7 +19,7 @@ jobs:
           python-version: '3.12'
       - name: Run native regression tests
         run: bash scripts/test.sh
-      - name: Prepare pinned upstream plus all seven patches
+      - name: Prepare pinned upstream plus all eight patches
         run: bash scripts/prepare_cc1101_v4.sh
       - name: Verify release integrity
         run: |
@@ -48,6 +48,9 @@ jobs:
           assert 'vTaskNotifyGiveFromISR(*arg, &xHigherPriorityTaskWoken);' in radio
           assert radio.count('BaseType_t xHigherPriorityTaskWoken = pdFALSE;') == 1
           assert 'BaseType_t xHigherPriorityTaskWoken;' not in radio
+          assert 'RX_DIAG v4.7 loop_only' in radio
+          assert 'loop_gap_last_poll_ms_' in hdr and 'loop_missing_periods_est_' in hdr
+          assert 'estimate_missing_30s_periods' in (src/'wmbus_radio/loop_gap_observer.h').read_text()
           for field in ('headers_failed_', 'payloads_failed_', 'long_radio_frames_'):
               assert field in hdr and field in radio
           assert 'Key: [REDACTED]' in meter
@@ -55,6 +58,10 @@ jobs:
           assert 'std::string key = this->get_key();' not in meter
           PY
           git -C vendor/cc1101_v4 diff --check
+      - name: Test v4.7 gap estimator against exact source header
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -Ivendor/cc1101_v4/components/wmbus_radio tests/v47_gap_math.cpp -o /tmp/wmbus-v47-gap-test
+          /tmp/wmbus-v47-gap-test
       - name: Generate isolated CI config and synthetic secrets
         run: |
           python - <<'PY'

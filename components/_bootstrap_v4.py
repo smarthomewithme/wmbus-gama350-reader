@@ -28,8 +28,9 @@ _PATCHES = (
     "0005-experimental-fifo16-threshold.patch",
     "0006-v4_4-clear-stale-irq.patch",
     "0007-v4_5-initialize-isr-woken.patch",
+    "0008-v4_7-loop-only-gap-observer.patch",
 )
-_CACHE_LAYOUT = b"shwm-wmbus-v4.5-isr-woken-init-v1\n"
+_CACHE_LAYOUT = b"shwm-wmbus-v4.7-loop-gap-observer-v1\n"
 _SHIM_SENTINEL = "_shwm_wmbus_v4_bootstrap"
 
 
@@ -80,7 +81,8 @@ def _ready(components_root: Path, cache_root: Path, fingerprint: str) -> bool:
     radio = components_root / "wmbus_radio" / "transceiver_cc1101.cpp"
     meter = components_root / "wmbus_meter" / "wmbus_meter.cpp"
     component = components_root / "wmbus_radio" / "component.cpp"
-    if not all(p.is_file() for p in (radio, meter, component)):
+    observer = components_root / "wmbus_radio" / "loop_gap_observer.h"
+    if not all(p.is_file() for p in (radio, meter, component, observer)):
         return False
     return ("SHWM v4.1 FIFO16 experiment" in radio.read_text(encoding="utf-8")
             and "CC1101_FIFOTHR, 0x03" in radio.read_text(encoding="utf-8")
@@ -88,7 +90,9 @@ def _ready(components_root: Path, cache_root: Path, fingerprint: str) -> bool:
             and "Key: [REDACTED]" in meter.read_text(encoding="utf-8")
             and "RX_DIAG cumulative" in component.read_text(encoding="utf-8")
             and "SHWM v4.4 stale IRQ clear" in component.read_text(encoding="utf-8")
-            and "BaseType_t xHigherPriorityTaskWoken = pdFALSE;" in component.read_text(encoding="utf-8"))
+            and "BaseType_t xHigherPriorityTaskWoken = pdFALSE;" in component.read_text(encoding="utf-8")
+            and "RX_DIAG v4.7 loop_only" in component.read_text(encoding="utf-8")
+            and "estimate_missing_30s_periods" in observer.read_text(encoding="utf-8"))
 
 
 def _restore_tracked_shims(repo_root: Path, components_root: Path) -> None:
@@ -154,6 +158,9 @@ def ensure_v4_components(repo_root: Path) -> Path:
                     (checkout / "components/wmbus_radio/component.cpp").read_text(encoding="utf-8") or
                     "BaseType_t xHigherPriorityTaskWoken = pdFALSE;" not in
                     (checkout / "components/wmbus_radio/component.cpp").read_text(encoding="utf-8") or
+                    "RX_DIAG v4.7 loop_only" not in
+                    (checkout / "components/wmbus_radio/component.cpp").read_text(encoding="utf-8") or
+                    not (checkout / "components/wmbus_radio/loop_gap_observer.h").is_file() or
                     "Key: [REDACTED]" not in meter_text or
                     "Key: %s" in meter_text):
                 raise RuntimeError("wMBus v4 verification failed")
@@ -177,7 +184,7 @@ def ensure_v4_components(repo_root: Path) -> Path:
         if not _ready_except_manifest(components_root, cache_root):
             raise RuntimeError("wMBus v4 components did not pass post-install checks")
         (cache_root / "manifest.sha256").write_text(fingerprint + "\n", encoding="ascii")
-        _LOGGER.info("CC1101 v4.5 ISR woken initialization experiment ready; v4.4 stale IRQ clear and FIFO16 preserved; AES keys redacted.")
+        _LOGGER.info("CC1101 v4.7 loop-only observer ready; v4.5 receive path and ISR preserved; AES keys redacted.")
         return cache_root
 
 
@@ -195,9 +202,12 @@ def _ready_except_manifest(components_root: Path, cache_root: Path) -> bool:
     radio = components_root / "wmbus_radio" / "transceiver_cc1101.cpp"
     component = components_root / "wmbus_radio" / "component.cpp"
     meter = components_root / "wmbus_meter" / "wmbus_meter.cpp"
-    return (all(p.is_file() for p in (radio, component, meter))
+    observer = components_root / "wmbus_radio" / "loop_gap_observer.h"
+    return (all(p.is_file() for p in (radio, component, meter, observer))
             and "RF_DIAG bytes=" in radio.read_text(encoding="utf-8")
             and "RX_DIAG cumulative" in component.read_text(encoding="utf-8")
+            and "RX_DIAG v4.7 loop_only" in component.read_text(encoding="utf-8")
+            and "estimate_missing_30s_periods" in observer.read_text(encoding="utf-8")
             and "SHWM v4.4 stale IRQ clear" in component.read_text(encoding="utf-8")
             and "BaseType_t xHigherPriorityTaskWoken = pdFALSE;" in component.read_text(encoding="utf-8")
             and "Key: [REDACTED]" in meter.read_text(encoding="utf-8")

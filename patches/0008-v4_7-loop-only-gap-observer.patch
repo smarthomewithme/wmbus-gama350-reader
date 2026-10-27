@@ -1,0 +1,99 @@
+diff --git a/components/wmbus_radio/component.cpp b/components/wmbus_radio/component.cpp
+--- a/components/wmbus_radio/component.cpp
++++ b/components/wmbus_radio/component.cpp
+@@ -1,4 +1,5 @@
+ #include "component.h"
++#include "loop_gap_observer.h"
+ 
+ #include "freertos/queue.h"
+ #include "freertos/task.h"
+@@ -43,6 +44,30 @@
+   // GPIO4 interrupts indicate the FIFO threshold, not a confirmed meter.
+   // Snapshot cumulative counters every five minutes outside the radio task.
+   const uint32_t now = millis();
++  // SHWM v4.7: observe existing v4.5 counters only from the ESPHome loop.
++  // A 1 s sampler deliberately does not touch the high-priority receiver task.
++  if (static_cast<uint32_t>(now - this->loop_gap_last_poll_ms_) >= 1000u) {
++    this->loop_gap_last_poll_ms_ = now;
++    const uint32_t long_now = this->long_radio_frames_.load(std::memory_order_relaxed);
++    const uint32_t payload_now = this->payloads_ok_.load(std::memory_order_relaxed);
++    const uint32_t short_now = payload_now >= long_now ? payload_now - long_now : 0u;
++    if (long_now != this->loop_gap_last_long_count_) {
++      if (this->loop_gap_last_long_count_ != 0u) {
++        const uint32_t gap_ms = now - this->loop_gap_last_long_ms_;
++        if (gap_ms >= 45000u) {
++          ++this->loop_gap_events_;
++          this->loop_missing_periods_est_ += estimate_missing_30s_periods(gap_ms);
++          if (short_now != this->loop_gap_last_short_count_)
++            ++this->loop_gaps_with_short_;
++          if (gap_ms > this->loop_max_gap_ms_)
++            this->loop_max_gap_ms_ = gap_ms;
++        }
++      }
++      this->loop_gap_last_long_ms_ = now;
++      this->loop_gap_last_long_count_ = long_now;
++      this->loop_gap_last_short_count_ = short_now;
++    }
++  }
+   if ((uint32_t) (now - this->last_diag_log_ms_) >= 300000u) {
+     this->last_diag_log_ms_ = now;
+     ESP_LOGI(TAG, "RX_DIAG cumulative irq_notifications=%lu header_ok=%lu header_fail=%lu payload_ok=%lu payload_fail=%lu long_radio_frames=%lu queue_drops=%lu",
+@@ -53,6 +78,16 @@
+              (unsigned long) this->payloads_failed_.load(std::memory_order_relaxed),
+              (unsigned long) this->long_radio_frames_.load(std::memory_order_relaxed),
+              (unsigned long) this->queue_drops_.load(std::memory_order_relaxed));
++    const uint32_t log_long = this->long_radio_frames_.load(std::memory_order_relaxed);
++    const uint32_t log_payload = this->payloads_ok_.load(std::memory_order_relaxed);
++    const uint32_t log_short = log_payload >= log_long ? log_payload - log_long : 0u;
++    ESP_LOGI(TAG, "RX_DIAG v4.7 loop_only poll_ms=1000 long_seen=%lu short_ok_est=%lu gap_ge45s=%lu missing_periods_est=%lu gaps_with_short=%lu max_gap_ms=%lu",
++             (unsigned long) this->loop_gap_last_long_count_,
++             (unsigned long) log_short,
++             (unsigned long) this->loop_gap_events_,
++             (unsigned long) this->loop_missing_periods_est_,
++             (unsigned long) this->loop_gaps_with_short_,
++             (unsigned long) this->loop_max_gap_ms_);
+   }
+   Packet *p;
+   if (xQueueReceive(this->packet_queue_, &p, 0) != pdPASS)
+diff --git a/components/wmbus_radio/component.h b/components/wmbus_radio/component.h
+--- a/components/wmbus_radio/component.h
++++ b/components/wmbus_radio/component.h
+@@ -43,6 +43,15 @@
+   std::atomic<uint32_t> long_radio_frames_{0};
+   std::atomic<uint32_t> queue_drops_{0};
+   uint32_t last_diag_log_ms_{0};
++  // v4.7 loop-only observer: none of these fields is accessed from the radio task.
++  uint32_t loop_gap_last_poll_ms_{0};
++  uint32_t loop_gap_last_long_count_{0};
++  uint32_t loop_gap_last_short_count_{0};
++  uint32_t loop_gap_last_long_ms_{0};
++  uint32_t loop_gap_events_{0};
++  uint32_t loop_missing_periods_est_{0};
++  uint32_t loop_gaps_with_short_{0};
++  uint32_t loop_max_gap_ms_{0};
+ 
+   std::vector<std::function<void(Frame *)>> handlers_;
+ };
+diff --git a/components/wmbus_radio/loop_gap_observer.h b/components/wmbus_radio/loop_gap_observer.h
+new file mode 100644
+--- /dev/null
++++ b/components/wmbus_radio/loop_gap_observer.h
+@@ -0,0 +1,18 @@
++#pragma once
++#include <cstdint>
++
++namespace esphome {
++namespace wmbus_radio {
++
++// Used from Radio::loop(), not from the CC1101 ISR or receiver task.
++// Nearest nominal 30 s interval, minus the one observed complete frame.
++constexpr uint32_t estimate_missing_30s_periods(uint32_t gap_ms) {
++  if (gap_ms < 45000u)
++    return 0u;
++  const uint32_t periods = gap_ms / 30000u +
++                           ((gap_ms % 30000u) >= 15000u ? 1u : 0u);
++  return periods - 1u;
++}
++
++}  // namespace wmbus_radio
++}  // namespace esphome
