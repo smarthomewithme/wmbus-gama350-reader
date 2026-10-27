@@ -1,7 +1,7 @@
 name: ESPHome GitHub one-line component install
 on:
   push:
-    branches: [feature/direct-esphome-install-v4, fix/v4-bootstrap-github-refresh, experiment/v4.1-fifo16, experiment/v4.4-stale-irq-clear, experiment/v4.5-isr-woken-init, experiment/v4.9-stable-marcstate-eof, experiment/v4.10-five-minute-rx-diag, experiment/v4.11-rxbytes65-prefetch, experiment/v4.12-overflow-fastpath, main]
+    branches: [feature/direct-esphome-install-v4, fix/v4-bootstrap-github-refresh, experiment/v4.1-fifo16, experiment/v4.4-stale-irq-clear, experiment/v4.5-isr-woken-init, experiment/v4.9-stable-marcstate-eof, experiment/v4.10-five-minute-rx-diag, experiment/v4.11-rxbytes65-prefetch, experiment/v4.12-overflow-fastpath, experiment/v4.13-progress-poll, main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -72,7 +72,7 @@ jobs:
       - name: Validate using actual GitHub component source (not local vendor)
         run: |
           esphome config config/wmbus-gama350-direct.yaml
-      - name: Assert v4.12 fast receive and preserved v4.11/v4.9 baseline
+      - name: Assert v4.13 post-drain polling and preserved v4.12/v4.9 baseline
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -89,18 +89,22 @@ jobs:
                      and 'rx_fifo_count_plausible(available)' in p.read_text()
                      and 'rx_fifo_complete_read(' in p.read_text()
                      and 'rx_should_probe_marcstate(' in p.read_text()
+                     and 'rx_should_backoff_after_drain(made_progress)' in p.read_text()
+                     and 'SHWM v4.13 post-drain polling' in p.read_text()
                      and 'SHWM v4.12 RX FIFO overflow' in p.read_text()
                      for p in matches), [str(p) for p in matches]
           fifo_sources = list(Path('config').rglob('cc1101_fifo.h'))
           assert fifo_sources, 'No prepared FIFO helper found'
           assert any('kCc1101MaxReportedRxBytes = 65' in p.read_text()
                      and 'rx_fifo_complete_read' in p.read_text()
+                     and 'inline constexpr bool rx_should_backoff_after_drain(' in p.read_text()
                      for p in fifo_sources)
           radio_sources = list(Path('config').rglob('component.cpp'))
           assert radio_sources, 'No prepared radio component.cpp found'
           assert any('SHWM v4.4 stale IRQ clear' in p.read_text()
                      and 'SHWM v4.10 RX_DIAG_5M' in p.read_text()
                      and 'SHWM wMBus v4.12 ACTIVE' in p.read_text()
+                     and 'SHWM wMBus v4.13 ACTIVE' in p.read_text()
                      and 'SHWM v4.12 RX_DIAG_1M' in p.read_text()
                      and '(void) ulTaskNotifyTake(pdTRUE, 0);' in p.read_text()
                      and 'BaseType_t xHigherPriorityTaskWoken = pdFALSE;' in p.read_text()

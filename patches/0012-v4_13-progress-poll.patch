@@ -1,0 +1,34 @@
+diff --git a/components/wmbus_radio/cc1101_fifo.h b/components/wmbus_radio/cc1101_fifo.h
+--- a/components/wmbus_radio/cc1101_fifo.h
++++ b/components/wmbus_radio/cc1101_fifo.h
+@@ -43,4 +43,10 @@
+   return !made_progress && received > 0 && received < requested;
+ }
+ 
++// v4.13: only idle/no-progress passes need the 200us receive backoff.
++// A successful FIFO drain should re-check RXBYTES without an extra sleep.
++inline constexpr bool rx_should_backoff_after_drain(bool made_progress) {
++  return !made_progress;
++}
++
+ // CC1101 RXBYTES is asynchronous to SPI. Require two consecutive equal reads.
+diff --git a/components/wmbus_radio/transceiver_cc1101.cpp b/components/wmbus_radio/transceiver_cc1101.cpp
+--- a/components/wmbus_radio/transceiver_cc1101.cpp
++++ b/components/wmbus_radio/transceiver_cc1101.cpp
+@@ -397,5 +397,7 @@
+       return false;
+     }
+ 
+-    delayMicroseconds(200);
++    // SHWM v4.13 post-drain polling: keep 200us backoff only on no progress.
++    if (rx_should_backoff_after_drain(made_progress))
++      delayMicroseconds(200);
+   }
+diff --git a/components/wmbus_radio/component.cpp b/components/wmbus_radio/component.cpp
+--- a/components/wmbus_radio/component.cpp
++++ b/components/wmbus_radio/component.cpp
+@@ -34,3 +34,4 @@
+   ESP_LOGI(TAG, "SHWM wMBus v4.12 ACTIVE: one-shot overflow recovery; fast FIFO polling");
++  ESP_LOGI(TAG, "SHWM wMBus v4.13 ACTIVE: skip post-drain 200us backoff; RX settings unchanged");
+   ESP_LOGI(TAG, "Receiver task created [%p]", this->receiver_task_handle_);
+ 

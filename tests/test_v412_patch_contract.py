@@ -39,7 +39,7 @@ class TestV412Recovery(unittest.TestCase):
         for source in (boot, sh):
             self.assertLess(source.index("0010-v4_11-rxbytes65-prefetch.patch"),
                             source.index(PATCH.name))
-        self.assertIn("shwm-wmbus-v4.12-overflow-fastpath-v1", boot)
+        self.assertIn("shwm-wmbus-v4.13-progress-poll-v1", boot)
         self.assertIn("SHWM v4.12 RX FIFO overflow", boot)
         self.assertIn("SHWM v4.12 RX_DIAG_1M", sh)
         for workflow in ("official-v4.yml", "direct-esphome-install.yml"):

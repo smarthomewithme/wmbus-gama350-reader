@@ -32,8 +32,9 @@ _PATCHES = (
     "0009-v4_10-five-minute-rx-diag.patch",
     "0010-v4_11-rxbytes65-prefetch.patch",
     "0011-v4_12-overflow-fastpath.patch",
+    "0012-v4_13-progress-poll.patch",
 )
-_CACHE_LAYOUT = b"shwm-wmbus-v4.12-overflow-fastpath-v1\n"
+_CACHE_LAYOUT = b"shwm-wmbus-v4.13-progress-poll-v1\n"
 _SHIM_SENTINEL = "_shwm_wmbus_v4_bootstrap"
 
 
@@ -90,6 +91,7 @@ def _ready(components_root: Path, cache_root: Path, fingerprint: str) -> bool:
         return False
     return ("SHWM v4.12 RX FIFO overflow" in radio.read_text(encoding="utf-8")
             and "SHWM wMBus v4.12 ACTIVE" in component.read_text(encoding="utf-8")
+            and "SHWM wMBus v4.13 ACTIVE" in component.read_text(encoding="utf-8")
             and "RX_DIAG_1M" in component.read_text(encoding="utf-8")
             and "SHWM v4.1 FIFO16 experiment" in radio.read_text(encoding="utf-8")
             and "CC1101_FIFOTHR, 0x03" in radio.read_text(encoding="utf-8")
@@ -100,6 +102,7 @@ def _ready(components_root: Path, cache_root: Path, fingerprint: str) -> bool:
             and "kCc1101MaxReportedRxBytes = 65" in fifo.read_text(encoding="utf-8")
             and "rx_fifo_count_plausible(available)" in radio.read_text(encoding="utf-8")
             and "rx_fifo_complete_read(" in radio.read_text(encoding="utf-8")
+            and "rx_should_backoff_after_drain(made_progress)" in radio.read_text(encoding="utf-8")
             and "Key: [REDACTED]" in meter.read_text(encoding="utf-8")
             and "RX_DIAG cumulative" in component.read_text(encoding="utf-8")
             and "SHWM v4.10 RX_DIAG_5M" in component.read_text(encoding="utf-8")
@@ -164,7 +167,9 @@ def ensure_v4_components(repo_root: Path) -> Path:
                     'this->write_register(CC1101_MDMCFG4, 0x6C);' in radio_text or
                     "RF_DIAG bytes=" not in radio_text or
                     "SHWM v4.12 RX FIFO overflow" not in radio_text or
+                    "SHWM v4.13 post-drain polling" not in radio_text or
                     "SHWM wMBus v4.12 ACTIVE" not in (checkout / "components/wmbus_radio/component.cpp").read_text(encoding="utf-8") or
+                    "SHWM wMBus v4.13 ACTIVE" not in (checkout / "components/wmbus_radio/component.cpp").read_text(encoding="utf-8") or
                     "RX_DIAG_1M" not in (checkout / "components/wmbus_radio/component.cpp").read_text(encoding="utf-8") or
                     "SHWM v4.9 MARCSTATE EOF confirmation" not in radio_text or
                     "confirm_marcstate_eof(" not in radio_text or
@@ -174,6 +179,7 @@ def ensure_v4_components(repo_root: Path) -> Path:
                     (checkout / "components/wmbus_radio/cc1101_fifo.h").read_text(encoding="utf-8") or
                     "rx_fifo_count_plausible(available)" not in radio_text or
                     "rx_fifo_complete_read(" not in radio_text or
+                    "rx_should_backoff_after_drain(made_progress)" not in radio_text or
                     "CC1101_FIFOTHR, 0x03" not in radio_text or
                     "CC1101_FIFOTHR, 0x07" in radio_text or
                     "SHWM v4.1 FIFO16 experiment" not in radio_text or
@@ -210,7 +216,7 @@ def ensure_v4_components(repo_root: Path) -> Path:
         if not _ready_except_manifest(components_root, cache_root):
             raise RuntimeError("wMBus v4 components did not pass post-install checks")
         (cache_root / "manifest.sha256").write_text(fingerprint + "\n", encoding="ascii")
-        _LOGGER.info("SHWM v4.12 overflow fast-path experimental firmware prepared; one-shot RX restart and one-minute counters; RF config unchanged.")
+        _LOGGER.info("SHWM v4.13 post-drain polling experiment prepared; 200us backoff only on no-progress RX iterations; RF config unchanged.")
         return cache_root
 
 
@@ -233,7 +239,9 @@ def _ready_except_manifest(components_root: Path, cache_root: Path) -> bool:
     return (all(p.is_file() for p in (radio, component, meter, fifo, diag))
             and "RF_DIAG bytes=" in radio.read_text(encoding="utf-8")
             and "SHWM v4.12 RX FIFO overflow" in radio.read_text(encoding="utf-8")
+            and "SHWM v4.13 post-drain polling" in radio.read_text(encoding="utf-8")
             and "SHWM wMBus v4.12 ACTIVE" in component.read_text(encoding="utf-8")
+            and "SHWM wMBus v4.13 ACTIVE" in component.read_text(encoding="utf-8")
             and "RX_DIAG_1M" in component.read_text(encoding="utf-8")
             and "SHWM v4.9 MARCSTATE EOF confirmation" in radio.read_text(encoding="utf-8")
             and "confirm_marcstate_eof(" in radio.read_text(encoding="utf-8")
@@ -241,6 +249,7 @@ def _ready_except_manifest(components_root: Path, cache_root: Path) -> bool:
             and "kCc1101MaxReportedRxBytes = 65" in fifo.read_text(encoding="utf-8")
             and "rx_fifo_count_plausible(available)" in radio.read_text(encoding="utf-8")
             and "rx_fifo_complete_read(" in radio.read_text(encoding="utf-8")
+            and "rx_should_backoff_after_drain(made_progress)" in radio.read_text(encoding="utf-8")
             and "RX_DIAG cumulative" in component.read_text(encoding="utf-8")
             and "SHWM v4.10 RX_DIAG_5M" in component.read_text(encoding="utf-8")
             and "frame_conversion_failed_" in component.read_text(encoding="utf-8")
