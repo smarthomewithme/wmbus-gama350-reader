@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic v4.2 diagnostics overlay on pinned upstream + patches 0001-0005.
+"""Deterministic v4.3 passive header diagnostics overlay on pinned upstream + patches 0001-0005.
 
 The overlay is applied during GitHub-hosted ESPHome preparation. Every edit is
 guarded by an exact, unique original snippet: upstream drift fails closed.
@@ -17,7 +17,7 @@ def replace_one(path: Path, old: str, new: str) -> None:
     occurrences = text.count(old)
     if occurrences != 1:
         raise RuntimeError(
-            f"v4.2 overlay: expected one match in {path.name}, "
+            f"v4.3 overlay: expected one match in {path.name}, "
             f"found {occurrences}: {old[:90]!r}"
         )
     path.write_text(text.replace(old, new), encoding="utf-8")
@@ -146,24 +146,10 @@ enum class ReceiveFailure : uint8_t {
     )
     replace_one(
         radio_header,
-        "  static void wakeup_receiver_task_from_isr(TaskHandle_t *arg);",
-        "  static void wakeup_receiver_task_from_isr(Radio *arg);",
-    )
-    replace_one(
-        radio_header,
         """  uint32_t last_diag_log_ms_{0};
 
   std::vector""",
         """  uint32_t last_diag_log_ms_{0};
-
-  // IRQ-to-pre-header-read latency is sampled once per task wake-up.
-  // ISR writes only a 32-bit timestamp; no SPI or logging in the ISR.
-  std::atomic<uint32_t> latest_irq_us_{0};
-  std::atomic<uint32_t> irq_lag_samples_{0};
-  std::atomic<uint32_t> irq_lag_total_us_{0};
-  std::atomic<uint32_t> irq_lag_max_us_{0};
-  std::atomic<uint32_t> irq_lag_over_1000us_{0};
-  std::atomic<uint32_t> irq_lag_stale_{0};
 
   // Cumulative mutually exclusive reasons for failed 3-byte headers.
   std::atomic<uint32_t> header_empty_timeout_{0};
@@ -179,36 +165,10 @@ enum class ReceiveFailure : uint8_t {
     )
     replace_one(
         radio_source,
-        """#include "component.h"
-
-#include "freertos/queue.h" """.rstrip(),
-        """#include "component.h"
-
-#include "esp_timer.h"
-#include "freertos/queue.h" """.rstrip(),
-    )
-    replace_one(
-        radio_source,
-        """Radio::wakeup_receiver_task_from_isr,
-                                     &(this->receiver_task_handle_));""",
-        """Radio::wakeup_receiver_task_from_isr,
-                                     this);""",
-    )
-    replace_one(
-        radio_source,
         """  }
   Packet *p;
   if (xQueueReceive(this->packet_queue_, &p, 0) != pdPASS)""",
-        """    const uint32_t samples = this->irq_lag_samples_.exchange(0, std::memory_order_relaxed);
-    const uint32_t total_us = this->irq_lag_total_us_.exchange(0, std::memory_order_relaxed);
-    const uint32_t max_us = this->irq_lag_max_us_.exchange(0, std::memory_order_relaxed);
-    const uint32_t slow = this->irq_lag_over_1000us_.exchange(0, std::memory_order_relaxed);
-    const uint32_t stale = this->irq_lag_stale_.exchange(0, std::memory_order_relaxed);
-    ESP_LOGI(TAG, "RX_START_DIAG window_samples=%lu irq_to_read_avg_us=%lu irq_to_read_max_us=%lu irq_gt1000us=%lu stale_irq=%lu hdr_timeout_empty=%lu hdr_timeout_partial=%lu hdr_unstable=%lu hdr_overflow=%lu hdr_invalid_fifo=%lu hdr_early_end=%lu hdr_other=%lu invalid_payload_length=%lu",
-             (unsigned long) samples,
-             (unsigned long) (samples ? total_us / samples : 0),
-             (unsigned long) max_us,
-             (unsigned long) slow, (unsigned long) stale,
+        """    ESP_LOGI(TAG, "RX_HEADER_DIAG cumulative hdr_timeout_empty=%lu hdr_timeout_partial=%lu hdr_unstable=%lu hdr_overflow=%lu hdr_invalid_fifo=%lu hdr_early_end=%lu hdr_other=%lu invalid_payload_length=%lu",
              (unsigned long) this->header_empty_timeout_.load(std::memory_order_relaxed),
              (unsigned long) this->header_partial_timeout_.load(std::memory_order_relaxed),
              (unsigned long) this->header_unstable_.load(std::memory_order_relaxed),
@@ -220,49 +180,6 @@ enum class ReceiveFailure : uint8_t {
   }
   Packet *p;
   if (xQueueReceive(this->packet_queue_, &p, 0) != pdPASS)""",
-    )
-    replace_one(
-        radio_source,
-        """void Radio::wakeup_receiver_task_from_isr(TaskHandle_t *arg) {
-  BaseType_t xHigherPriorityTaskWoken;
-  vTaskNotifyGiveFromISR(*arg, &xHigherPriorityTaskWoken);
-  portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
-}""",
-        """void Radio::wakeup_receiver_task_from_isr(Radio *arg) {
-  BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-  // Stores the latest FIFO-threshold IRQ, not the beginning of an RF telegram.
-  arg->latest_irq_us_.store(static_cast<uint32_t>(esp_timer_get_time()),
-                            std::memory_order_relaxed);
-  vTaskNotifyGiveFromISR(arg->receiver_task_handle_, &xHigherPriorityTaskWoken);
-  portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
-}""",
-    )
-    replace_one(
-        radio_source,
-        """  auto packet = std::make_unique<Packet>();
-
-  auto *header_data = packet->rx_data_ptr();""",
-        """  auto packet = std::make_unique<Packet>();
-
-  // Timestamp taken just before the first header read (before its SPI access).
-  // Unsigned subtraction remains valid across the ~71-minute 32-bit wrap.
-  const uint32_t irq_us = this->latest_irq_us_.load(std::memory_order_relaxed);
-  const uint32_t irq_lag = static_cast<uint32_t>(esp_timer_get_time()) - irq_us;
-  if (irq_us != 0 && irq_lag <= 100000u) {
-    this->irq_lag_samples_.fetch_add(1, std::memory_order_relaxed);
-    this->irq_lag_total_us_.fetch_add(irq_lag, std::memory_order_relaxed);
-    if (irq_lag > 1000u)
-      this->irq_lag_over_1000us_.fetch_add(1, std::memory_order_relaxed);
-    uint32_t previous_max = this->irq_lag_max_us_.load(std::memory_order_relaxed);
-    while (irq_lag > previous_max &&
-           !this->irq_lag_max_us_.compare_exchange_weak(previous_max, irq_lag,
-                                                         std::memory_order_relaxed)) {}
-  } else {
-    // Coalesced/stale GPIO interrupts are not valid latency measurements.
-    this->irq_lag_stale_.fetch_add(1, std::memory_order_relaxed);
-  }
-
-  auto *header_data = packet->rx_data_ptr();""",
     )
     replace_one(
         radio_source,
@@ -319,7 +236,7 @@ enum class ReceiveFailure : uint8_t {
     replace_one(
         radio_source,
         """  ESP_LOGI(TAG, "Receiver task created [%p]", this->receiver_task_handle_);""",
-        """  ESP_LOGI(TAG, "SHWM v4.2 IRQ/header diagnostics enabled; FIFO16 unchanged");
+        """  ESP_LOGI(TAG, "SHWM v4.3 passive header diagnostics enabled; FIFO16 unchanged");
   ESP_LOGI(TAG, "Receiver task created [%p]", this->receiver_task_handle_);""",
     )
 
@@ -327,16 +244,16 @@ enum class ReceiveFailure : uint8_t {
     checks = {
         transceiver: ("enum class ReceiveFailure", "last_receive_failure"),
         cc_source: ("ReceiveFailure::EMPTY_TIMEOUT", "ReceiveFailure::EARLY_END"),
-        radio_header: ("irq_lag_samples_", "header_empty_timeout_"),
-        radio_source: ("RX_START_DIAG", "esp_timer_get_time", "SHWM v4.2 IRQ/header diagnostics enabled"),
+        radio_header: ("header_empty_timeout_", "header_other_"),
+        radio_source: ("RX_HEADER_DIAG", "SHWM v4.3 passive header diagnostics enabled"),
     }
     for path, signatures in checks.items():
         body = path.read_text(encoding="utf-8")
         for signature in signatures:
             if signature not in body:
-                raise RuntimeError(f"v4.2 overlay verification failed: {path.name}: {signature}")
+                raise RuntimeError(f"v4.3 overlay verification failed: {path.name}: {signature}")
 
-    print("V42_DIAGNOSTICS_OVERLAY_PASS: pinned v4.1 FIFO16 unchanged; added IRQ/header counters")
+    print("V43_PASSIVE_DIAG_OVERLAY_PASS: pinned FIFO16 unchanged; no ISR instrumentation")
 
 
 if __name__ == "__main__":
