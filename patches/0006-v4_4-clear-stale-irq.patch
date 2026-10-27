@@ -1,0 +1,14 @@
+diff --git a/components/wmbus_radio/component.cpp b/components/wmbus_radio/component.cpp
+--- a/components/wmbus_radio/component.cpp
++++ b/components/wmbus_radio/component.cpp
+@@ -137,4 +137,10 @@ void Radio::receive_frame() {
+   packet->set_rssi(this->radio->get_rssi());
+ 
++  // SHWM v4.4 stale IRQ clear: FIFO threshold can re-trigger during one frame.
++  // All pending notifications here belong to the just-completed receive,
++  // before restarting the sync detector for the next packet.
++  // Do not modify the ISR, the RX FIFO drain, or packet parsing.
++  (void) ulTaskNotifyTake(pdTRUE, 0);
++
+   // Re-arm sync word detector for next packet
+   this->radio->restart_rx();
