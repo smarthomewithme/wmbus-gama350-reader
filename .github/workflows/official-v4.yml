@@ -1,7 +1,7 @@
 name: Official CC1101 v4 validation (no flash)
 on:
   push:
-    branches: [release/v4-radio-diagnostics, main]
+    branches: [release/v4-radio-diagnostics, experiment/v4.4-stale-irq-clear, main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -19,7 +19,7 @@ jobs:
           python-version: '3.12'
       - name: Run native regression tests
         run: bash scripts/test.sh
-      - name: Prepare pinned upstream plus all four patches
+      - name: Prepare pinned upstream plus all six patches
         run: bash scripts/prepare_cc1101_v4.sh
       - name: Verify release integrity
         run: |
@@ -38,6 +38,14 @@ jobs:
           assert 'RF_DIAG bytes=' in driver
           assert 'unstable_rxbytes=' in driver
           assert 'RX_DIAG cumulative' in radio
+          marker = '// SHWM v4.4 stale IRQ clear'
+          drain = '(void) ulTaskNotifyTake(pdTRUE, 0);'
+          rearm = '// Re-arm sync word detector for next packet'
+          assert radio.count(marker) == 1
+          assert radio.count(drain) == 1
+          assert radio.index('packet->set_rssi(this->radio->get_rssi());') < radio.index(marker) < radio.index(drain) < radio.index(rearm)
+          assert 'void Radio::wakeup_receiver_task_from_isr(TaskHandle_t *arg)' in radio
+          assert 'vTaskNotifyGiveFromISR(*arg, &xHigherPriorityTaskWoken);' in radio
           for field in ('headers_failed_', 'payloads_failed_', 'long_radio_frames_'):
               assert field in hdr and field in radio
           assert 'Key: [REDACTED]' in meter
