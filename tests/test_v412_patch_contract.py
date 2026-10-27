@@ -24,10 +24,14 @@ class TestV412Recovery(unittest.TestCase):
         self.assertIn("-      this->restart_rx();", p)
         self.assertIn("-          this->restart_rx();", p)
         self.assertNotIn("+      this->restart_rx();", p)
+        # Unified diffs include unchanged context lines; enforce this guard
+        # only on added source lines, never on surrounding pre-existing code.
+        additions = " ".join(line for line in p.splitlines()
+                              if line.startswith("+") and not line.startswith("+++"))
         for forbidden in ("CC1101_MDMCFG4", "CC1101_FIFOTHR", "CC1101_FREQ",
                           "this->write_register(", "wakeup_receiver_task_from_isr(",
                           "attach_data_interrupt(", "this->strobe("):
-            self.assertNotIn(forbidden, p)
+            self.assertNotIn(forbidden, additions)
 
     def test_patch_order_cache_and_ci(self):
         boot = (ROOT / "components/_bootstrap_v4.py").read_text()
