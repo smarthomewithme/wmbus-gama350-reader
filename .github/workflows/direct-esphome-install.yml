@@ -1,7 +1,7 @@
 name: ESPHome GitHub one-line component install
 on:
   push:
-    branches: [feature/direct-esphome-install-v4, fix/v4-bootstrap-github-refresh, experiment/v4.1-fifo16, experiment/v4.4-stale-irq-clear, experiment/v4.5-isr-woken-init, main]
+    branches: [feature/direct-esphome-install-v4, fix/v4-bootstrap-github-refresh, experiment/v4.1-fifo16, experiment/v4.4-stale-irq-clear, experiment/v4.5-isr-woken-init, experiment/v4.6-passive-long-gaps, main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -72,7 +72,7 @@ jobs:
       - name: Validate using actual GitHub component source (not local vendor)
         run: |
           esphome config config/wmbus-gama350-direct.yaml
-      - name: Assert v4.5 ISR init and preserved v4.4 FIFO16 stale IRQ clear
+      - name: Assert v4.6 passive counters and preserved FIFO16/IRQ handling
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -91,7 +91,10 @@ jobs:
                      and '(void) ulTaskNotifyTake(pdTRUE, 0);' in p.read_text()
                      and 'BaseType_t xHigherPriorityTaskWoken = pdFALSE;' in p.read_text()
                      and 'BaseType_t xHigherPriorityTaskWoken;' not in p.read_text()
+                     and 'RX_DIAG v4.6' in p.read_text()
+                     and 'long_candidates_' in p.read_text()
                      for p in radio_sources), [str(p) for p in radio_sources]
+          assert list(Path('config').rglob('long_gap_diagnostics.h')), 'No prepared v4.6 gap helper'
           PY
       - name: Validate a second time with refresh always
         run: |

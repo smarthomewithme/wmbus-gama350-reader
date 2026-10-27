@@ -27,7 +27,8 @@ for name in \
   0004-radio-diagnostics-and-key-redaction.patch \
   0005-experimental-fifo16-threshold.patch \
   0006-v4_4-clear-stale-irq.patch \
-  0007-v4_5-initialize-isr-woken.patch; do
+  0007-v4_5-initialize-isr-woken.patch \
+  0008-v4_6-passive-long-gap-diagnostics.patch; do
   git -C "$DEST" apply --check "$PATCHES/$name"
   git -C "$DEST" apply "$PATCHES/$name"
 done
@@ -44,11 +45,13 @@ grep -Fq 'RF_DIAG bytes=' "$RADIO"
 grep -Fq 'RX_DIAG cumulative' "$DEST/components/wmbus_radio/component.cpp"
 grep -Fq 'SHWM v4.4 stale IRQ clear' "$DEST/components/wmbus_radio/component.cpp"
 grep -Fq 'BaseType_t xHigherPriorityTaskWoken = pdFALSE;' "$DEST/components/wmbus_radio/component.cpp"
+grep -Fq 'RX_DIAG v4.6' "$DEST/components/wmbus_radio/component.cpp"
+grep -Fq 'estimate_missing_30s_periods' "$DEST/components/wmbus_radio/long_gap_diagnostics.h"
 grep -Fq 'Key: [REDACTED]' "$METER"
 ! grep -Fq 'Key: %s' "$METER"
 
-echo "CC1101 v4.5 ISR woken init experiment prepared: $DEST/components"
+echo "CC1101 v4.6 passive long-gap diagnostic experiment prepared: $DEST/components"
 echo "Pinned upstream: $PIN"
-echo "Radio BW: 325 kHz; RX FIFO threshold 16B; stale IRQ notifications cleared; ISR woken flag initialized to pdFALSE."
+echo "Radio BW: 325 kHz; RX FIFO threshold 16B; stale IRQ cleared; ISR woken pdFALSE; passive gap counters."
 echo "Plaintext AES startup logging disabled. No YAML or firmware modified."
 git -C "$DEST" diff --stat

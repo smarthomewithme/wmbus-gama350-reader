@@ -1,0 +1,108 @@
+diff --git a/components/wmbus_radio/component.cpp b/components/wmbus_radio/component.cpp
+--- a/components/wmbus_radio/component.cpp
++++ b/components/wmbus_radio/component.cpp
+@@ -1,4 +1,5 @@
+ #include "component.h"
++#include "long_gap_diagnostics.h"
+ 
+ #include "freertos/queue.h"
+ #include "freertos/task.h"
+@@ -53,6 +54,15 @@
+              (unsigned long) this->payloads_failed_.load(std::memory_order_relaxed),
+              (unsigned long) this->long_radio_frames_.load(std::memory_order_relaxed),
+              (unsigned long) this->queue_drops_.load(std::memory_order_relaxed));
++    // SHWM v4.6: passive receiver-task counters; no extra CC1101 reads.
++    ESP_LOGI(TAG, "RX_DIAG v4.6 long_candidates=%lu long_read_fail=%lu short_radio_frames=%lu gap_ge45s=%lu missing_periods_est=%lu gaps_with_short=%lu max_gap_ms=%lu",
++             (unsigned long) this->long_candidates_.load(std::memory_order_relaxed),
++             (unsigned long) this->long_read_failures_.load(std::memory_order_relaxed),
++             (unsigned long) this->short_radio_frames_.load(std::memory_order_relaxed),
++             (unsigned long) this->long_gap_events_.load(std::memory_order_relaxed),
++             (unsigned long) this->missing_long_periods_est_.load(std::memory_order_relaxed),
++             (unsigned long) this->gaps_with_short_.load(std::memory_order_relaxed),
++             (unsigned long) this->max_long_gap_ms_.load(std::memory_order_relaxed));
+   }
+   Packet *p;
+   if (xQueueReceive(this->packet_queue_, &p, 0) != pdPASS)
+@@ -124,14 +134,40 @@
+ 
+   auto *payload_data = packet->rx_data_ptr();
+   const size_t payload_capacity = packet->rx_capacity();
++  // Count long packet candidates after the header is parsed, before FIFO read.
++  // This does not identify a specific meter until application decoding.
++  const bool long_candidate = payload_capacity >= 250;
++  if (long_candidate)
++    this->long_candidates_.fetch_add(1, std::memory_order_relaxed);
+   if (!this->radio->read_in_task(payload_data, payload_capacity, 3)) {
+     this->payloads_failed_.fetch_add(1, std::memory_order_relaxed);
++    if (long_candidate)
++      this->long_read_failures_.fetch_add(1, std::memory_order_relaxed);
+     this->radio->restart_rx();
+     return;
+   }
+   this->payloads_ok_.fetch_add(1, std::memory_order_relaxed);
+-  if (payload_capacity >= 250)
++  if (long_candidate) {
+     this->long_radio_frames_.fetch_add(1, std::memory_order_relaxed);
++    // Estimate missing 30 s slots from gaps between *full* long RF frames.
++    // This is a timing estimate, not proof a missing frame was transmitted.
++    const uint32_t received_at_ms = millis();
++    if (this->last_long_rx_ms_ != 0u) {
++      const uint32_t gap_ms = received_at_ms - this->last_long_rx_ms_;
++      if (gap_ms >= 45000u) {
++        this->long_gap_events_.fetch_add(1, std::memory_order_relaxed);
++        this->missing_long_periods_est_.fetch_add(estimate_missing_30s_periods(gap_ms), std::memory_order_relaxed);
++        if (this->short_radio_frames_.load(std::memory_order_relaxed) != this->last_long_short_count_)
++          this->gaps_with_short_.fetch_add(1, std::memory_order_relaxed);
++        if (gap_ms > this->max_long_gap_ms_.load(std::memory_order_relaxed))
++          this->max_long_gap_ms_.store(gap_ms, std::memory_order_relaxed);
++      }
++    }
++    this->last_long_rx_ms_ = received_at_ms;
++    this->last_long_short_count_ = this->short_radio_frames_.load(std::memory_order_relaxed);
++  } else {
++    this->short_radio_frames_.fetch_add(1, std::memory_order_relaxed);
++  }
+ 
+   packet->set_rssi(this->radio->get_rssi());
+ 
+diff --git a/components/wmbus_radio/component.h b/components/wmbus_radio/component.h
+--- a/components/wmbus_radio/component.h
++++ b/components/wmbus_radio/component.h
+@@ -42,6 +42,16 @@
+   std::atomic<uint32_t> payloads_failed_{0};
+   std::atomic<uint32_t> long_radio_frames_{0};
+   std::atomic<uint32_t> queue_drops_{0};
++  // v4.6 receive-path observability only; 5-minute summaries run in loop().
++  std::atomic<uint32_t> long_candidates_{0};
++  std::atomic<uint32_t> long_read_failures_{0};
++  std::atomic<uint32_t> short_radio_frames_{0};
++  std::atomic<uint32_t> long_gap_events_{0};
++  std::atomic<uint32_t> missing_long_periods_est_{0};
++  std::atomic<uint32_t> gaps_with_short_{0};
++  std::atomic<uint32_t> max_long_gap_ms_{0};
++  uint32_t last_long_rx_ms_{0};       // Receiver task only.
++  uint32_t last_long_short_count_{0}; // Receiver task only.
+   uint32_t last_diag_log_ms_{0};
+ 
+   std::vector<std::function<void(Frame *)>> handlers_;
+diff --git a/components/wmbus_radio/long_gap_diagnostics.h b/components/wmbus_radio/long_gap_diagnostics.h
+new file mode 100644
+--- /dev/null
++++ b/components/wmbus_radio/long_gap_diagnostics.h
+@@ -0,0 +1,16 @@
++#pragma once
++#include <cstdint>
++
++namespace esphome {
++namespace wmbus_radio {
++
++// Approximate missing slots only; CC1101 cannot prove a telegram was sent.
++// Round a gap to nearest 30 s and subtract the one observed frame.
++constexpr inline uint32_t estimate_missing_30s_periods(uint32_t gap_ms) {
++  if (gap_ms < 45000u)
++    return 0u;
++  return gap_ms / 30000u + ((gap_ms % 30000u >= 15000u) ? 1u : 0u) - 1u;
++}
++
++}  // namespace wmbus_radio
++}  // namespace esphome

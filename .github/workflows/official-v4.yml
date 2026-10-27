@@ -1,7 +1,7 @@
 name: Official CC1101 v4 validation (no flash)
 on:
   push:
-    branches: [release/v4-radio-diagnostics, experiment/v4.4-stale-irq-clear, experiment/v4.5-isr-woken-init, main]
+    branches: [release/v4-radio-diagnostics, experiment/v4.4-stale-irq-clear, experiment/v4.5-isr-woken-init, experiment/v4.6-passive-long-gaps, main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -19,7 +19,7 @@ jobs:
           python-version: '3.12'
       - name: Run native regression tests
         run: bash scripts/test.sh
-      - name: Prepare pinned upstream plus all seven patches
+      - name: Prepare pinned upstream plus all eight patches
         run: bash scripts/prepare_cc1101_v4.sh
       - name: Verify release integrity
         run: |
@@ -47,6 +47,10 @@ jobs:
           assert 'void Radio::wakeup_receiver_task_from_isr(TaskHandle_t *arg)' in radio
           assert 'vTaskNotifyGiveFromISR(*arg, &xHigherPriorityTaskWoken);' in radio
           assert radio.count('BaseType_t xHigherPriorityTaskWoken = pdFALSE;') == 1
+          assert 'RX_DIAG v4.6' in radio
+          assert 'long_candidates_' in hdr and 'long_read_failures_' in hdr
+          assert 'gaps_with_short_' in hdr and 'max_long_gap_ms_' in hdr
+          assert (src/'wmbus_radio/long_gap_diagnostics.h').is_file()
           assert 'BaseType_t xHigherPriorityTaskWoken;' not in radio
           for field in ('headers_failed_', 'payloads_failed_', 'long_radio_frames_'):
               assert field in hdr and field in radio
@@ -55,6 +59,10 @@ jobs:
           assert 'std::string key = this->get_key();' not in meter
           PY
           git -C vendor/cc1101_v4 diff --check
+      - name: Test actual v4.6 missing-period estimator
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -Ivendor/cc1101_v4/components/wmbus_radio tests/v46_gap_math.cpp -o /tmp/wmbus-v46-gap-test
+          /tmp/wmbus-v46-gap-test
       - name: Generate isolated CI config and synthetic secrets
         run: |
           python - <<'PY'

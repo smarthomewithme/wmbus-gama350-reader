@@ -59,7 +59,9 @@ with tempfile.TemporaryDirectory(prefix="wmbus-v4-refresh-test-") as temp:
     (component_root / "wmbus_radio" / "transceiver_cc1101.cpp").write_text(
         "// RF_DIAG bytes=; CC1101_MDMCFG4 0x5C; CC1101_FIFOTHR, 0x03; SHWM v4.1 FIFO16 experiment\n", encoding="utf-8")
     (component_root / "wmbus_radio" / "component.cpp").write_text(
-        "// RX_DIAG cumulative; SHWM v4.4 stale IRQ clear; BaseType_t xHigherPriorityTaskWoken = pdFALSE;\n", encoding="utf-8")
+        "// RX_DIAG cumulative; SHWM v4.4 stale IRQ clear; BaseType_t xHigherPriorityTaskWoken = pdFALSE; RX_DIAG v4.6\n", encoding="utf-8")
+    (component_root / "wmbus_radio" / "long_gap_diagnostics.h").write_text(
+        "// estimate_missing_30s_periods\n", encoding="utf-8")
     (component_root / "wmbus_meter" / "wmbus_meter.cpp").write_text(
         "// Key: [REDACTED]\n", encoding="utf-8")
 
