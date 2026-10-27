@@ -24,11 +24,11 @@ class TestV417Scope(unittest.TestCase):
             self.assertLess(x.index("0014-v4_16-long-no-progress-short-poll.patch"),x.index(PATCH.name))
             self.assertNotIn("0014-v4_15",x)
             self.assertIn("SHWM wMBus v4.17 ACTIVE",x)
-        self.assertIn("shwm-wmbus-v4.17-midpoint-long-poll-v1",boot)
+        self.assertIn("shwm-wmbus-v4.18-long-idle-150us-v1",boot)
         self.assertTrue((ROOT/"tests/v417_midpoint_poll.cpp").exists())
         for p in (ROOT/".github/workflows/official-v4.yml",ROOT/".github/workflows/direct-esphome-install.yml"):
             t=p.read_text()
             self.assertIn("experiment/v4.17-midpoint-long-poll",t)
-            self.assertIn("rx_v417_no_progress_backoff_us(offset, length)",t)
+            self.assertTrue(any(token in t for token in ("rx_v417_no_progress_backoff_us(offset, length)", "rx_v418_no_progress_backoff_us(offset, length)")))
 if __name__=="__main__":
     unittest.main()

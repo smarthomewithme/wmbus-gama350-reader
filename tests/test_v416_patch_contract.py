@@ -25,11 +25,11 @@ class TestV416Scope(unittest.TestCase):
             self.assertLess(s.index("0013-v4_14-preallocate-packet-before-irq.patch"),s.index(PATCH.name))
             self.assertNotIn("0014-v4_15",s)
             self.assertIn("SHWM wMBus v4.16 ACTIVE",s)
-        self.assertIn("shwm-wmbus-v4.17-midpoint-long-poll-v1",b)
+        self.assertIn("shwm-wmbus-v4.18-long-idle-150us-v1",b)
         self.assertTrue((ROOT/"tests/v416_long_idle_poll.cpp").exists())
         for name in ("official-v4.yml","direct-esphome-install.yml"):
             s=(ROOT/".github/workflows"/name).read_text()
             self.assertIn("experiment/v4.16-long-idle-poll",s)
-            self.assertTrue(any(token in s for token in ("rx_no_progress_backoff_us(offset, length)", "rx_v417_no_progress_backoff_us(offset, length)")))
+            self.assertTrue(any(token in s for token in ("rx_no_progress_backoff_us(offset, length)", "rx_v417_no_progress_backoff_us(offset, length)", "rx_v418_no_progress_backoff_us(offset, length)")))
 if __name__=="__main__":
     unittest.main()
