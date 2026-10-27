@@ -28,7 +28,7 @@ int main() {
         assert(partial == 0 && final == 0);
       }
       if (raw >= 2 && raw <= 65 && remaining > 0) {
-        assert(partial <= raw - 1);  // Incomplete packet keeps a byte in FIFO.
+        assert(partial <= static_cast<std::size_t>(raw - 1));  // Incomplete packet keeps a byte in FIFO.
       }
       if (raw < remaining)
         assert(final == 0);
