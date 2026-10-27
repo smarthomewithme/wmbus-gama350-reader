@@ -26,8 +26,9 @@ _PATCHES = (
     "0003-cc1101-stable-rxbytes.patch",
     "0004-radio-diagnostics-and-key-redaction.patch",
     "0005-experimental-fifo16-threshold.patch",
+    "0006-v4_4-clear-stale-irq.patch",
 )
-_CACHE_LAYOUT = b"shwm-wmbus-v4.1-fifo16-isolated-experiment-v1\n"
+_CACHE_LAYOUT = b"shwm-wmbus-v4.4-stale-irq-clear-v1\n"
 _SHIM_SENTINEL = "_shwm_wmbus_v4_bootstrap"
 
 
@@ -84,7 +85,8 @@ def _ready(components_root: Path, cache_root: Path, fingerprint: str) -> bool:
             and "CC1101_FIFOTHR, 0x03" in radio.read_text(encoding="utf-8")
             and "RF_DIAG bytes=" in radio.read_text(encoding="utf-8")
             and "Key: [REDACTED]" in meter.read_text(encoding="utf-8")
-            and "RX_DIAG cumulative" in component.read_text(encoding="utf-8"))
+            and "RX_DIAG cumulative" in component.read_text(encoding="utf-8")
+            and "SHWM v4.4 stale IRQ clear" in component.read_text(encoding="utf-8"))
 
 
 def _restore_tracked_shims(repo_root: Path, components_root: Path) -> None:
@@ -146,6 +148,8 @@ def ensure_v4_components(repo_root: Path) -> Path:
                     "SHWM v4.1 FIFO16 experiment" not in radio_text or
                     "RX_DIAG cumulative" not in
                     (checkout / "components/wmbus_radio/component.cpp").read_text(encoding="utf-8") or
+                    "SHWM v4.4 stale IRQ clear" not in
+                    (checkout / "components/wmbus_radio/component.cpp").read_text(encoding="utf-8") or
                     "Key: [REDACTED]" not in meter_text or
                     "Key: %s" in meter_text):
                 raise RuntimeError("wMBus v4 verification failed")
@@ -169,7 +173,7 @@ def ensure_v4_components(repo_root: Path) -> Path:
         if not _ready_except_manifest(components_root, cache_root):
             raise RuntimeError("wMBus v4 components did not pass post-install checks")
         (cache_root / "manifest.sha256").write_text(fingerprint + "\n", encoding="ascii")
-        _LOGGER.info("CC1101 v4.1 FIFO16 experimental components ready; AES startup keys redacted.")
+        _LOGGER.info("CC1101 v4.4 stale IRQ clear experiment ready; FIFO16 preserved; AES keys redacted.")
         return cache_root
 
 
@@ -190,5 +194,6 @@ def _ready_except_manifest(components_root: Path, cache_root: Path) -> bool:
     return (all(p.is_file() for p in (radio, component, meter))
             and "RF_DIAG bytes=" in radio.read_text(encoding="utf-8")
             and "RX_DIAG cumulative" in component.read_text(encoding="utf-8")
+            and "SHWM v4.4 stale IRQ clear" in component.read_text(encoding="utf-8")
             and "Key: [REDACTED]" in meter.read_text(encoding="utf-8")
             and "CC1101_FIFOTHR, 0x03" in radio.read_text(encoding="utf-8"))
