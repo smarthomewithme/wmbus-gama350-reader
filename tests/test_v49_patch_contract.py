@@ -41,7 +41,9 @@ class TestV49Scope(unittest.TestCase):
         for text in (bootstrap, shell):
             positions = [text.index(name) for name in names]
             self.assertEqual(positions, sorted(positions))
-        self.assertIn("shwm-wmbus-v4.9-stable-marcstate-eof-v1", bootstrap)
+        # The active cache fingerprint changes with v4.10; its exact value is
+        # checked by the latest-version contract. This guard verifies v4.9
+        # remains in the ordered patch chain.
 
 
 if __name__ == "__main__":
