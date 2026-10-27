@@ -1,0 +1,53 @@
+diff --git a/components/wmbus_radio/transceiver_cc1101.cpp b/components/wmbus_radio/transceiver_cc1101.cpp
+--- a/components/wmbus_radio/transceiver_cc1101.cpp
++++ b/components/wmbus_radio/transceiver_cc1101.cpp
+@@ -320,8 +320,18 @@
+     if (available > peak_fifo)
+       peak_fifo = available;
+     if (available > 64) {
+-      ESP_LOGW(TAG, "Invalid RX FIFO count: %u", (unsigned) available);
+-      return false;
++      // v4.8: the 65-byte status is suspect; recheck only this error branch.
++      // Never turn an overflow flag or a persistent invalid count into a read.
++      const uint8_t invalid_count = available;
++      if (!retry_invalid_fifo_count(
++              rxbytes_raw, stable_rxbytes,
++              []() { delayMicroseconds(60); })) {
++        ESP_LOGW(TAG, "Invalid RX FIFO count: %u", (unsigned) invalid_count);
++        return false;  // Radio::receive_frame() performs restart_rx().
++      }
++      available = rxbytes_raw & 0x7F;
++      // RXBYTES transient count recovered; avoid logging inside the radio task.
++      // The original invalid sample remains visible as peak_fifo=65 for long RX.
+     }
+ 
+     if (available > 0) {
+diff --git a/components/wmbus_radio/cc1101_fifo.h b/components/wmbus_radio/cc1101_fifo.h
+--- a/components/wmbus_radio/cc1101_fifo.h
++++ b/components/wmbus_radio/cc1101_fifo.h
+@@ -20,5 +20,25 @@
+   return false;
+ }
+ 
++// Used ONLY after an already stable, non-overflow, impossible RXBYTES count.
++// Bounded retries (3), preserving the original sample on any failure.
++// Passing 0/64 is safe: the caller's regular FIFO accounting handles it.
++template <typename StableRead, typename Pause>
++inline bool retry_invalid_fifo_count(uint8_t &raw, StableRead stable_read, Pause pause) {
++  if ((raw & 0x80u) != 0u || (raw & 0x7Fu) <= 64u)
++    return false;
++  for (unsigned int attempt = 0; attempt < 3; ++attempt) {
++    pause();
++    uint8_t candidate = 0;
++    if (!stable_read(candidate))
++      continue;
++    if ((candidate & 0x80u) == 0u && (candidate & 0x7Fu) <= 64u) {
++      raw = candidate;
++      return true;
++    }
++  }
++  return false;
++}
++
+ }  // namespace wmbus_radio
+ }  // namespace esphome

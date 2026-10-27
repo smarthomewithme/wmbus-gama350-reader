@@ -1,7 +1,7 @@
 name: ESPHome GitHub one-line component install
 on:
   push:
-    branches: [feature/direct-esphome-install-v4, fix/v4-bootstrap-github-refresh, experiment/v4.1-fifo16, experiment/v4.4-stale-irq-clear, experiment/v4.5-isr-woken-init, main]
+    branches: [feature/direct-esphome-install-v4, fix/v4-bootstrap-github-refresh, experiment/v4.1-fifo16, experiment/v4.4-stale-irq-clear, experiment/v4.5-isr-woken-init, experiment/v4.8-rxbytes-bounded-recheck, main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -72,7 +72,7 @@ jobs:
       - name: Validate using actual GitHub component source (not local vendor)
         run: |
           esphome config config/wmbus-gama350-direct.yaml
-      - name: Assert v4.5 ISR init and preserved v4.4 FIFO16 stale IRQ clear
+      - name: Assert v4.8 bounded RXBYTES recovery and preserved v4.5 ISR path
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -84,7 +84,13 @@ jobs:
           assert matches, 'No prepared CC1101 source found'
           assert any('CC1101_FIFOTHR, 0x03' in p.read_text()
                      and 'SHWM v4.1 FIFO16 experiment' in p.read_text()
+                     and 'RXBYTES transient count recovered' in p.read_text()
+                     and p.read_text().count('retry_invalid_fifo_count(') == 1
                      for p in matches), [str(p) for p in matches]
+          fifo_headers = list(Path('config').rglob('cc1101_fifo.h'))
+          assert fifo_headers, 'No prepared cc1101_fifo.h found'
+          assert any('inline bool retry_invalid_fifo_count' in p.read_text()
+                     for p in fifo_headers), [str(p) for p in fifo_headers]
           radio_sources = list(Path('config').rglob('component.cpp'))
           assert radio_sources, 'No prepared radio component.cpp found'
           assert any('SHWM v4.4 stale IRQ clear' in p.read_text()
