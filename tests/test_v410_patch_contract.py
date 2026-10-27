@@ -44,7 +44,7 @@ class TestV410Scope(unittest.TestCase):
         for text in (bootstrap, shell):
             positions = [text.index(n) for n in names]
             self.assertEqual(positions, sorted(positions))
-        self.assertIn("shwm-wmbus-v4.10-five-minute-rx-diag-v1", bootstrap)
+        # Current cache fingerprint is owned by the newest version contract.
         self.assertIn("SHWM v4.10 RX_DIAG_5M", shell)
 
 

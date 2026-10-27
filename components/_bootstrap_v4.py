@@ -30,8 +30,9 @@ _PATCHES = (
     "0007-v4_5-initialize-isr-woken.patch",
     "0008-v4_9-confirm-marcstate-eof.patch",
     "0009-v4_10-five-minute-rx-diag.patch",
+    "0010-v4_11-rxbytes65-prefetch.patch",
 )
-_CACHE_LAYOUT = b"shwm-wmbus-v4.10-five-minute-rx-diag-v1\n"
+_CACHE_LAYOUT = b"shwm-wmbus-v4.11-rxbytes65-prefetch-v1\n"
 _SHIM_SENTINEL = "_shwm_wmbus_v4_bootstrap"
 
 
@@ -92,6 +93,9 @@ def _ready(components_root: Path, cache_root: Path, fingerprint: str) -> bool:
             and "SHWM v4.9 MARCSTATE EOF confirmation" in radio.read_text(encoding="utf-8")
             and "confirm_marcstate_eof(" in radio.read_text(encoding="utf-8")
             and "inline bool confirm_marcstate_eof(" in fifo.read_text(encoding="utf-8")
+            and "kCc1101MaxReportedRxBytes = 65" in fifo.read_text(encoding="utf-8")
+            and "rx_fifo_count_plausible(available)" in radio.read_text(encoding="utf-8")
+            and "rx_fifo_complete_read(" in radio.read_text(encoding="utf-8")
             and "Key: [REDACTED]" in meter.read_text(encoding="utf-8")
             and "RX_DIAG cumulative" in component.read_text(encoding="utf-8")
             and "SHWM v4.10 RX_DIAG_5M" in component.read_text(encoding="utf-8")
@@ -159,6 +163,10 @@ def ensure_v4_components(repo_root: Path) -> Path:
                     "confirm_marcstate_eof(" not in radio_text or
                     "inline bool confirm_marcstate_eof(" not in
                     (checkout / "components/wmbus_radio/cc1101_fifo.h").read_text(encoding="utf-8") or
+                    "kCc1101MaxReportedRxBytes = 65" not in
+                    (checkout / "components/wmbus_radio/cc1101_fifo.h").read_text(encoding="utf-8") or
+                    "rx_fifo_count_plausible(available)" not in radio_text or
+                    "rx_fifo_complete_read(" not in radio_text or
                     "CC1101_FIFOTHR, 0x03" not in radio_text or
                     "CC1101_FIFOTHR, 0x07" in radio_text or
                     "SHWM v4.1 FIFO16 experiment" not in radio_text or
@@ -220,6 +228,9 @@ def _ready_except_manifest(components_root: Path, cache_root: Path) -> bool:
             and "SHWM v4.9 MARCSTATE EOF confirmation" in radio.read_text(encoding="utf-8")
             and "confirm_marcstate_eof(" in radio.read_text(encoding="utf-8")
             and "inline bool confirm_marcstate_eof(" in fifo.read_text(encoding="utf-8")
+            and "kCc1101MaxReportedRxBytes = 65" in fifo.read_text(encoding="utf-8")
+            and "rx_fifo_count_plausible(available)" in radio.read_text(encoding="utf-8")
+            and "rx_fifo_complete_read(" in radio.read_text(encoding="utf-8")
             and "RX_DIAG cumulative" in component.read_text(encoding="utf-8")
             and "SHWM v4.10 RX_DIAG_5M" in component.read_text(encoding="utf-8")
             and "frame_conversion_failed_" in component.read_text(encoding="utf-8")

@@ -29,7 +29,8 @@ for name in \
   0006-v4_4-clear-stale-irq.patch \
   0007-v4_5-initialize-isr-woken.patch \
   0008-v4_9-confirm-marcstate-eof.patch \
-  0009-v4_10-five-minute-rx-diag.patch; do
+  0009-v4_10-five-minute-rx-diag.patch \
+  0010-v4_11-rxbytes65-prefetch.patch; do
   git -C "$DEST" apply --check "$PATCHES/$name"
   git -C "$DEST" apply "$PATCHES/$name"
 done
@@ -45,6 +46,9 @@ grep -Fq 'SHWM v4.1 FIFO16 experiment' "$RADIO"
 grep -Fq 'SHWM v4.9 MARCSTATE EOF confirmation' "$RADIO"
 grep -Fq 'confirm_marcstate_eof(' "$RADIO"
 grep -Fq 'inline bool confirm_marcstate_eof(' "$DEST/components/wmbus_radio/cc1101_fifo.h"
+grep -Fq 'kCc1101MaxReportedRxBytes = 65' "$DEST/components/wmbus_radio/cc1101_fifo.h"
+grep -Fq 'rx_fifo_count_plausible(available)' "$RADIO"
+grep -Fq 'rx_fifo_complete_read(' "$RADIO"
 grep -Fq 'RF_DIAG bytes=' "$RADIO"
 grep -Fq 'RX_DIAG cumulative' "$DEST/components/wmbus_radio/component.cpp"
 grep -Fq 'SHWM v4.10 RX_DIAG_5M' "$DEST/components/wmbus_radio/component.cpp"
@@ -55,8 +59,8 @@ grep -Fq 'BaseType_t xHigherPriorityTaskWoken = pdFALSE;' "$DEST/components/wmbu
 grep -Fq 'Key: [REDACTED]' "$METER"
 ! grep -Fq 'Key: %s' "$METER"
 
-echo "CC1101 v4.10 five-minute RX diagnostics experiment prepared: $DEST/components"
+echo "CC1101 v4.11 RXBYTES=65 prefetch compatibility experiment prepared: $DEST/components"
 echo "Pinned upstream: $PIN"
-echo "Radio BW: 325 kHz; RX FIFO threshold 16B; v4.9 MARCSTATE confirmation retained; five-minute diagnostics outside radio task only."
+echo "Radio BW: 325 kHz; RX FIFO threshold 16B; v4.9 MARCSTATE confirmation retained; five-minute diagnostics preserved; RXBYTES=65 accepted without any RF register changes."
 echo "Plaintext AES startup logging disabled. No YAML or firmware modified."
 git -C "$DEST" diff --stat
