@@ -31,7 +31,7 @@ class TestV414PacketPreallocation(unittest.TestCase):
         for s in (boot, shell):
             self.assertLess(s.index("0012-v4_13-progress-poll.patch"), s.index(PATCH.name))
             self.assertIn("SHWM wMBus v4.14 ACTIVE", s)
-        self.assertIn("shwm-wmbus-v4.14-prealloc-irq-v1", boot)
+        self.assertIn("shwm-wmbus-v4.15-fast-unstable-retry-v1", boot)
         for name in ("official-v4.yml", "direct-esphome-install.yml"):
             s = (ROOT / ".github/workflows" / name).read_text()
             self.assertIn("experiment/v4.14-prealloc-irq", s)

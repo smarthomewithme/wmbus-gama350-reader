@@ -1,7 +1,7 @@
 name: ESPHome GitHub one-line component install
 on:
   push:
-    branches: [feature/direct-esphome-install-v4, fix/v4-bootstrap-github-refresh, experiment/v4.1-fifo16, experiment/v4.4-stale-irq-clear, experiment/v4.5-isr-woken-init, experiment/v4.9-stable-marcstate-eof, experiment/v4.10-five-minute-rx-diag, experiment/v4.11-rxbytes65-prefetch, experiment/v4.12-overflow-fastpath, experiment/v4.13-progress-poll, experiment/v4.14-prealloc-irq, main]
+    branches: [feature/direct-esphome-install-v4, fix/v4-bootstrap-github-refresh, experiment/v4.1-fifo16, experiment/v4.4-stale-irq-clear, experiment/v4.5-isr-woken-init, experiment/v4.9-stable-marcstate-eof, experiment/v4.10-five-minute-rx-diag, experiment/v4.11-rxbytes65-prefetch, experiment/v4.12-overflow-fastpath, experiment/v4.13-progress-poll, experiment/v4.14-prealloc-irq, experiment/v4.15-fast-unstable-retry, main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -72,7 +72,7 @@ jobs:
       - name: Validate using actual GitHub component source (not local vendor)
         run: |
           esphome config config/wmbus-gama350-direct.yaml
-      - name: Assert v4.14 pre-IRQ packet allocation and preserved RX baseline
+      - name: Assert v4.15 fast unstable RXBYTES retry and preserved RX baseline
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -90,6 +90,8 @@ jobs:
                      and 'rx_fifo_complete_read(' in p.read_text()
                      and 'rx_should_probe_marcstate(' in p.read_text()
                      and 'rx_should_backoff_after_drain(made_progress)' in p.read_text()
+                      and 'rx_should_backoff_after_unstable(offset, length)' in p.read_text()
+                      and 'SHWM v4.15 retry unstable RXBYTES immediately for long payloads.' in p.read_text()
                      and 'SHWM v4.13 post-drain polling' in p.read_text()
                      and 'SHWM v4.12 RX FIFO overflow' in p.read_text()
                      for p in matches), [str(p) for p in matches]
@@ -98,6 +100,7 @@ jobs:
           assert any('kCc1101MaxReportedRxBytes = 65' in p.read_text()
                      and 'rx_fifo_complete_read' in p.read_text()
                      and 'inline constexpr bool rx_should_backoff_after_drain(' in p.read_text()
+                      and 'inline constexpr bool rx_should_backoff_after_unstable(' in p.read_text()
                      for p in fifo_sources)
           radio_sources = list(Path('config').rglob('component.cpp'))
           assert radio_sources, 'No prepared radio component.cpp found'
@@ -106,6 +109,7 @@ jobs:
                      and 'SHWM wMBus v4.12 ACTIVE' in p.read_text()
                      and 'SHWM wMBus v4.13 ACTIVE' in p.read_text()
                      and 'SHWM wMBus v4.14 ACTIVE' in p.read_text()
+                      and 'SHWM wMBus v4.15 ACTIVE' in p.read_text()
                      and 'SHWM v4.14 packet preallocation' in p.read_text()
                      and 'SHWM v4.12 RX_DIAG_1M' in p.read_text()
                      and '(void) ulTaskNotifyTake(pdTRUE, 0);' in p.read_text()

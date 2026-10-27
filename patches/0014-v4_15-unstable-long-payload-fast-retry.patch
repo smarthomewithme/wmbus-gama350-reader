@@ -1,0 +1,33 @@
+diff --git a/components/wmbus_radio/cc1101_fifo.h b/components/wmbus_radio/cc1101_fifo.h
+--- a/components/wmbus_radio/cc1101_fifo.h
++++ b/components/wmbus_radio/cc1101_fifo.h
+@@ -50,4 +50,10 @@
+   return !made_progress;
+ }
+ 
++// v4.15: retry an unstable RXBYTES count immediately during long payloads
++// while the CC1101 FIFO is still filling. Preserve short-frame backoff.
++inline constexpr bool rx_should_backoff_after_unstable(uint32_t offset, std::size_t length) {
++  return offset != 3u || length < 250u;
++}
++
+ // CC1101 RXBYTES is asynchronous to SPI. Require two consecutive equal reads.
+diff --git a/components/wmbus_radio/transceiver_cc1101.cpp b/components/wmbus_radio/transceiver_cc1101.cpp
+--- a/components/wmbus_radio/transceiver_cc1101.cpp
++++ b/components/wmbus_radio/transceiver_cc1101.cpp
+@@ -296,4 +296,6 @@
+-      delayMicroseconds(100);
++      // SHWM v4.15 retry unstable RXBYTES immediately for long payloads.
++      if (rx_should_backoff_after_unstable(offset, length))
++        delayMicroseconds(100);
+       continue;
+     }
+     if (rxbytes_raw & 0x80) {
+diff --git a/components/wmbus_radio/component.cpp b/components/wmbus_radio/component.cpp
+--- a/components/wmbus_radio/component.cpp
++++ b/components/wmbus_radio/component.cpp
+@@ -35,3 +35,4 @@
+   ESP_LOGI(TAG, "SHWM wMBus v4.13 ACTIVE: skip post-drain 200us backoff; RX settings unchanged");
+   ESP_LOGI(TAG, "SHWM wMBus v4.14 ACTIVE: packet preallocated before RX IRQ");
++  ESP_LOGI(TAG, "SHWM wMBus v4.15 ACTIVE: skip unstable-RXBYTES 100us backoff for long payloads");
+   ESP_LOGI(TAG, "Receiver task created [%p]", this->receiver_task_handle_);
