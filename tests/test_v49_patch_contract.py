@@ -37,11 +37,13 @@ class TestV49Scope(unittest.TestCase):
             "0006-v4_4-clear-stale-irq.patch",
             "0007-v4_5-initialize-isr-woken.patch",
             PATCH.name,
+            "0009-v4_25-v410-five-minute-window.patch",
+            "0010-v4_25-v414-packet-preallocation.patch",
         ]
         for text in (bootstrap, shell):
             positions = [text.index(name) for name in names]
             self.assertEqual(positions, sorted(positions))
-        self.assertIn("shwm-wmbus-v4.9-stable-marcstate-eof-v1", bootstrap)
+        self.assertIn("shwm-wmbus-v4.25-v49-targeted-backports-v1", bootstrap)
 
 
 if __name__ == "__main__":

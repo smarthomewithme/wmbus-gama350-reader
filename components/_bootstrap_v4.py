@@ -163,9 +163,11 @@ def ensure_v4_components(repo_root: Path) -> Path:
                     "CC1101_FIFOTHR, 0x03" not in radio_text or
                     "CC1101_FIFOTHR, 0x07" in radio_text or
                     "SHWM v4.1 FIFO16 experiment" not in radio_text or
-                    "RX_DIAG cumulative" not in                    "RX_DIAG_5M" not in (checkout / "components/wmbus_radio/component.cpp").read_text(encoding="utf-8") or
-                    "SHWM v4.25 PREALLOC" not in (checkout / "components/wmbus_radio/component.cpp").read_text(encoding="utf-8") or
-
+                    "RX_DIAG cumulative" not in
+                    (checkout / "components/wmbus_radio/component.cpp").read_text(encoding="utf-8") or
+                    "RX_DIAG_5M" not in
+                    (checkout / "components/wmbus_radio/component.cpp").read_text(encoding="utf-8") or
+                    "SHWM v4.25 PREALLOC" not in
                     (checkout / "components/wmbus_radio/component.cpp").read_text(encoding="utf-8") or
                     "SHWM v4.4 stale IRQ clear" not in
                     (checkout / "components/wmbus_radio/component.cpp").read_text(encoding="utf-8") or
