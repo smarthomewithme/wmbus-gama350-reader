@@ -27,8 +27,13 @@ class TestV426(unittest.TestCase):
     s=(ROOT/"patches"/"0009-v426-rxbytes65-prefetch-only.patch").read_text()
     files=[x.removeprefix("diff --git a/").split(" b/")[0] for x in s.splitlines() if x.startswith("diff --git a/")]
     self.assertEqual(files,["components/wmbus_radio/cc1101_fifo.h","components/wmbus_radio/transceiver_cc1101.cpp"])
+    # Inspect ONLY added/deleted diff lines. Unmodified context can mention
+    # restart_rx, but the isolated patch must not add/remove that operation.
+    modified="\n".join(x[1:] for x in s.splitlines()
+      if (x.startswith("+") and not x.startswith("+++")) or
+         (x.startswith("-") and not x.startswith("---")))
     for word in ("component.cpp","component.h","rx_diag_window","wakeup_receiver_task_from_isr","delayMicroseconds","CC1101_FIFOTHR","CC1101_MDMCFG4","MARCSTATE","restart_rx","write_register"):
-      with self.subTest(word=word): self.assertNotIn(word,s)
+      with self.subTest(word=word): self.assertNotIn(word,modified)
     for word in ("kCc1101MaxReportedRxBytes = 65","rx_fifo_incomplete_read(available, remaining)","rx_fifo_complete_read(confirmed & 0x7F, remaining)"):
       self.assertIn(word,s)
   def test_ci_2026101(self):
