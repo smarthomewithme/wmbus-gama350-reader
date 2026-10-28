@@ -1,52 +1,38 @@
-# wMBus GAMA 350 Reader — ESP32 + CC1101
+# SHWM GAMA350 / Apator — stabilna v4.9 + diagnostyka v4.27
 
-Odczyt licznika GAMA 350 i wodomierza Apator przez ESPHome / Home Assistant.
+**Wersją radiową do codziennego używania jest v4.9.** Nie wgrywaj v4.27 tylko po to, aby zebrać logi. Nowa gałąź v4.27 zawiera **zewnętrzny analizator logów**, a kod CC1101 / ISR / FIFO i oryginalne osiem patchy pozostają bajt w bajt takie same jak w v4.9.
 
-**Oficjalny wariant v4: instalacja prosto z GitHuba. Bez terminala, pobierania repozytorium, ręcznego nakładania poprawek czy kopiowania plików.**
-
-[English README](README.md) · [Diagnostyka i przywracanie](docs/V4_DIAGNOSTICS.md) · [Źródła SzczepanLeona](https://github.com/SzczepanLeon/esphome-components)
-
-## Instalacja w ESPHome — jedyna zmiana w YAML
-
-W edytorze istniejącego urządzenia ESPHome znajdź sekcję `external_components` i **zastąp ją** następującą:
+## Stabilna konfiguracja ESPHome
 
 ```yaml
 external_components:
-  - source: github://smarthomewithme/wmbus-gama350-reader@main
-    components: [wmbus_radio, wmbus_common, wmbus_meter, socket_transmitter]
+  - source: github://smarthomewithme/wmbus-gama350-reader@experiment/v4.9-stable-marcstate-eof
+    refresh: always
+    components:
+      - wmbus_radio
+      - wmbus_common
+      - wmbus_meter
+      - socket_transmitter
 ```
 
-Zapisz konfigurację i użyj **Validate → Install → Wirelessly**. Gdy przechodzisz z innej wersji komponentów, najpierw wybierz **Clean Build Files**. Przed pierwszym OTA zachowaj kopię obecnego YAML i działającego firmware.
+Zachowaj dotychczasową konfigurację ESP32, Wi-Fi, OTA, klucze AES i identyfikatory liczników.
 
-Nie zmieniaj istniejących pinów, częstotliwości radia, kluczy AES, identyfikatorów liczników, sensorów, automatyzacji ani UDP. Nie podmieniaj własnej konfiguracji plikiem demonstracyjnym z repozytorium.
+## Nowa diagnostyka — bez ryzyka dla ESP32
 
-**To wszystko.** ESPHome samo pobiera i przygotowuje komponenty podczas walidacji. Pierwsza walidacja może potrwać dłużej; serwer ESPHome musi mieć dostęp do GitHuba. Testowane wydanie ESPHome: 2026.10.0.
+Zapisz log w formacie tekstowym (z włączonymi istniejącymi komunikatami `CC1101: DEBUG`). Pobierz plik [scripts/analyze_v427.py](scripts/analyze_v427.py), a następnie na Windowsie z Pythonem 3.10+:
 
-## Co robi instalacja automatycznie?
+```powershell
+py -3 .\analyze_v427.py --input "C:\Users\Public\gama-log.txt" --out "C:\Users\Public\gama-report"
+```
 
-W repozytorium są małe komponenty instalacyjne, które pobierają kod autora z dokładnego commita `a732dd0e52c48973fad57e4950a11d8e2f2d6820`, nakładają poprawki `0001–0004` i udostępniają wynik kompilatorowi ESPHome. Nie trzeba do tego terminala.
+Otrzymasz:
+- `report.md`: liczba pełnych ramek, błędów 3of6, lista niezaobserwowanych okien 30 s;
+- `gama_slots.csv`: każdy oczekiwany termin nadawania GAMA i jego zaobserwowany status;
+- `errors_3of6.csv`: konkretne offsety i symbole błędów, RSSI, surowe LQI/FREQEST;
+- `summary.json`: statystyki do automatycznego porównywania wersji.
 
-Nie rozpowszechniamy bezpośrednio cudzego kodu ze względu na prawa autorów i odrębne licencje bibliotek `wmbusmeters`. Kod jest pobierany z pierwotnego źródła na urządzeniu, na którym kompilujesz firmware.
+Ważne: **niezaobserwowane okno nie musi oznaczać błędu odbiornika**. Mogło nie być transmisji, nie uzyskaliśmy synchronizacji albo log jest niekompletny. Przy braku pełnej ramki nie ma czego dekodować i nie znamy RSSI tej transmisji.
 
-## Co już działa?
+Instrukcja i ograniczenia: [v4.27 Passive Diagnostic](docs/V427_PASSIVE_DIAGNOSTICS.md). Raporty możesz również wysyłać w tej rozmowie bez instalowania Pythona.
 
-**V3 zostało przetestowane fizycznie:** przez około 30 minut poprawnie odczytano 39 telegramów GAMA (około 65% oczekiwanych), odebrano 41 pełnych ramek 326 B i poprawnie zdekodowano 161 telegramów Apatora. Nie jest to 100% niezawodności.
-
-**V4 zachowuje działający tor radiowy v3** (filtr 325 kHz) i dodaje:
-- `RX_DIAG` co 5 minut — liczba notyfikacji przerwań, poprawnych nagłówków, odczytów danych i błędów;
-- `RF_DIAG` — `FREQEST`, `LQI`, `MARCSTATE` po odebraniu długiej ramki;
-- `Key: [REDACTED]` — brak jawnego klucza AES w logu konfiguracji.
-
-**Odbiór v4 nie jest jeszcze przetestowany na fizycznym CC1101.** Zaliczenie testów i kompilacji nie zastępuje pomiaru jakości odbioru przy zamkniętej bramie.
-
-## Bezpieczeństwo i licencje
-
-Zachowaj prywatność identyfikatorów liczników i kluczy. Starsze wydania mogły ujawniać klucz AES w logach startowych. Nawet v4 na poziomie DEBUG może wypisywać prywatne odczyty pomiarowe.
-
-Nasze pliki i poprawki są na licencji MIT. Część kodu zewnętrznego ma odrębne warunki, m.in. GPL; ten projekt ich nie zmienia.
-
-Szczegóły testowania oraz przywrócenia poprzedniej wersji: [docs/V4_DIAGNOSTICS.md](docs/V4_DIAGNOSTICS.md).
-
-### Dla programistów
-
-`scripts/prepare_cc1101_v4.sh` nadal służy do ręcznego budowania izolowanej kopii źródeł, ale **zwykły użytkownik ESPHome nigdy nie musi go uruchamiać**.
+Starsze 34 gałęzie zostały usunięte, 29 historycznych PR-ów zamknięto; zachowano wyłącznie `main`, stabilną v4.9 i diagnostyczną v4.27. Lista commitów starych gałęzi: [archiwum](docs/LEGACY_REF_ARCHIVE_20261028.json).
