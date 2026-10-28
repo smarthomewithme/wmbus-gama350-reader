@@ -1,0 +1,149 @@
+{
+  "repository": "smarthomewithme/wmbus-gama350-reader",
+  "recorded_on": "2026-10-28",
+  "reason": "explicit owner request: retain main, physical stable v4.9, passive observer v4.27 only",
+  "preserve": {
+    "diagnostics/v4.27-v49-passive-observer": "d5d4adce95ea881206bb60a88d9552dafeb46f88",
+    "experiment/v4.9-stable-marcstate-eof": "11b09de7f87ade632453f772c37940dbdb470c94",
+    "main": "b481690d896e3e6b285a77966a50df46a0a8663b"
+  },
+  "delete_exact_refs": [
+    {
+      "name": "diagnostics/cc1101-long-frame-v2",
+      "sha": "6a6f4e788bca2bb7b4c6174c7908286eb769202d"
+    },
+    {
+      "name": "diagnostics/v49-v425-binary-forensics",
+      "sha": "1b77ad5a54a56b297950a8b3d79445d59944640e"
+    },
+    {
+      "name": "diagnostics/v421-v423-build-compare",
+      "sha": "1f6d59dee916cddff9b14ec7aa9875e8db005fc2"
+    },
+    {
+      "name": "experiment/cc1101-rx-bw270",
+      "sha": "2c5d7e0f26da9aac8a6d35921a78c8f0a27715c1"
+    },
+    {
+      "name": "experiment/v4.1-fifo16",
+      "sha": "9add584d230c3c3e1d62ecb1a3c37cce844e2393"
+    },
+    {
+      "name": "experiment/v4.2-irq-header-diagnostics",
+      "sha": "1889afe0d83e8817fb4898017c0c0592ac8c26de"
+    },
+    {
+      "name": "experiment/v4.3-passive-header",
+      "sha": "c26a9dd86b48078d327de3829fe0d8db75aa6f87"
+    },
+    {
+      "name": "experiment/v4.4-stale-irq-clear",
+      "sha": "16ed1c1e3d7da2ce4d463e8351224183b25612ee"
+    },
+    {
+      "name": "experiment/v4.5-isr-woken-init",
+      "sha": "c95f692e3a8bb357730e91f58b2cd45eba8aa29c"
+    },
+    {
+      "name": "experiment/v4.6-passive-long-gaps",
+      "sha": "e1038cb089a3ff94e402fb3eaa54fb48cdf21540"
+    },
+    {
+      "name": "experiment/v4.7-loop-gap-observer",
+      "sha": "71c44482aeed43ec13f464e58d61acd8e491d03f"
+    },
+    {
+      "name": "experiment/v4.8-rxbytes-bounded-recheck",
+      "sha": "c89779d800fe44c548458b2d56cf27688efc4fa7"
+    },
+    {
+      "name": "experiment/v4.10-five-minute-rx-diag",
+      "sha": "60b40f8f25afe889284352119872cd9405548307"
+    },
+    {
+      "name": "experiment/v4.11-rxbytes65-prefetch",
+      "sha": "5757448116ff8bfa56981d671bcc5be4db4a15c3"
+    },
+    {
+      "name": "experiment/v4.12-overflow-fastpath",
+      "sha": "c97ad5c531d7eb2b51cf2fa46a15ea8ca77408ef"
+    },
+    {
+      "name": "experiment/v4.13-progress-poll",
+      "sha": "0479f9be65527ed2da64484e3108d05acc0a6845"
+    },
+    {
+      "name": "experiment/v4.14-prealloc-irq",
+      "sha": "633096eb9dbc73b32a3ff1db1cbef55107079d3e"
+    },
+    {
+      "name": "experiment/v4.15-fast-unstable-retry",
+      "sha": "276cfe77f01398a2b2ae5727173943e0156275a9"
+    },
+    {
+      "name": "experiment/v4.16-long-idle-poll",
+      "sha": "9a825eb11fb07698698e38b886db9bdd1a77cea6"
+    },
+    {
+      "name": "experiment/v4.17-midpoint-long-poll",
+      "sha": "3cc700587f9eaa86610ebf5cb061f2c6f48b3b43"
+    },
+    {
+      "name": "experiment/v4.18-long-idle-150us",
+      "sha": "50b9ece6487cdb5b003fe1e34cd02ca1c4b92c21"
+    },
+    {
+      "name": "experiment/v4.19-early-fifo8-irq",
+      "sha": "fd0ad017c3c78a1dc2425b2dd36a5331d3afb104"
+    },
+    {
+      "name": "experiment/v4.20-long-progress-coalesce",
+      "sha": "4cf249b65d6e8a329fe91c5e350b465123602526"
+    },
+    {
+      "name": "experiment/v4.21-verbatim-v417-control",
+      "sha": "a11d6f8f8efe882351796a981cbeedb73f12071a"
+    },
+    {
+      "name": "experiment/v4.22-error-snapshots",
+      "sha": "b5b4e5c92503321f5577fa2b87d6758b4a0b4ca4"
+    },
+    {
+      "name": "experiment/v4.23-irq-latency",
+      "sha": "1bc91749cb9235ed4c564bbbe162479c26cb3666"
+    },
+    {
+      "name": "experiment/v4.24-marker-only-control",
+      "sha": "8ccef759ad32a965fa00d50ddbf10d108660306d"
+    },
+    {
+      "name": "experiment/v4.25-v49-targeted-backports",
+      "sha": "1eae2327ce176592513ede8212bf9eb8b1cec971"
+    },
+    {
+      "name": "experiment/v4.25a-v49-diagnostics-only",
+      "sha": "7b8c5e948f0c3029372bc999d5b823def7edfd63"
+    },
+    {
+      "name": "experiment/v4.26-v49-rxbytes65-only",
+      "sha": "aedd25dc70702ed8a4d33cc2ac4193e08b137b12"
+    },
+    {
+      "name": "feature/direct-esphome-install-v4",
+      "sha": "3d5a19b6b2320ea2861ac10b00dfbe976919fc19"
+    },
+    {
+      "name": "fix/cc1101-stable-rxbytes-v3",
+      "sha": "1834742eae1594451a3fd491ff434380cb62d1f4"
+    },
+    {
+      "name": "fix/v4-bootstrap-github-refresh",
+      "sha": "acc4455e527ba487aeffa45e6976ed5376fc2508"
+    },
+    {
+      "name": "release/v4-radio-diagnostics",
+      "sha": "e08fa991621b8f326045cd0f469ac1fb65ec47fd"
+    }
+  ],
+  "notes": "Closed experimental PR history remains available via PR numbers #7–#37. These SHAs allow branch restoration if GitHub retains commit objects; SHA preservation is not an indefinite object-retention guarantee."
+}
