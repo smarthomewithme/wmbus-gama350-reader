@@ -1,7 +1,7 @@
 name: ESPHome GitHub one-line component install
 on:
   push:
-    branches: [feature/direct-esphome-install-v4, fix/v4-bootstrap-github-refresh, experiment/v4.1-fifo16, experiment/v4.4-stale-irq-clear, experiment/v4.5-isr-woken-init, experiment/v4.9-stable-marcstate-eof, experiment/v4.10-five-minute-rx-diag, experiment/v4.11-rxbytes65-prefetch, experiment/v4.12-overflow-fastpath, experiment/v4.13-progress-poll, experiment/v4.14-prealloc-irq, experiment/v4.16-long-idle-poll, experiment/v4.17-midpoint-long-poll, experiment/v4.21-verbatim-v417-control, main]
+    branches: [feature/direct-esphome-install-v4, fix/v4-bootstrap-github-refresh, experiment/v4.1-fifo16, experiment/v4.4-stale-irq-clear, experiment/v4.5-isr-woken-init, experiment/v4.9-stable-marcstate-eof, experiment/v4.10-five-minute-rx-diag, experiment/v4.11-rxbytes65-prefetch, experiment/v4.12-overflow-fastpath, experiment/v4.13-progress-poll, experiment/v4.14-prealloc-irq, experiment/v4.16-long-idle-poll, experiment/v4.17-midpoint-long-poll, experiment/v4.21-verbatim-v417-control, experiment/v4.22-error-snapshots, main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -112,6 +112,7 @@ jobs:
                      and 'SHWM wMBus v4.14 ACTIVE' in p.read_text()
                       and 'SHWM wMBus v4.16 ACTIVE' in p.read_text()
                       and 'SHWM wMBus v4.17 ACTIVE' in p.read_text()
+                      and 'SHWM wMBus v4.22 ACTIVE' in p.read_text()
                       and 'SHWM wMBus v4.15 ACTIVE' not in p.read_text()
                      and 'SHWM v4.14 packet preallocation' in p.read_text()
                      and 'SHWM v4.12 RX_DIAG_1M' in p.read_text()

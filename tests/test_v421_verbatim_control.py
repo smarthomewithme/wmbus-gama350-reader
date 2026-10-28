@@ -76,13 +76,13 @@ class TestV421VerbatimControl(unittest.TestCase):
     def test_exact_v417_patch_chain(self):
         b=(ROOT/"components/_bootstrap_v4.py").read_text(encoding="utf-8")
         self.assertIn('a732dd0e52c48973fad57e4950a11d8e2f2d6820', b)
-        self.assertIn('shwm-wmbus-v4.21-verbatim-v417-control-v1', b)
-        self.assertIn('SHWM v4.21 CONTROL:',b)
+        self.assertIn('shwm-wmbus-v4.22-failure-only-snapshots-v1', b)
+        self.assertIn('SHWM v4.22 diagnostic:',b)
         mod=ast.parse(b)
         node=next(n.value for n in mod.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='_PATCHES' for t in n.targets))
         chain=ast.literal_eval(node)
-        self.assertEqual(chain,tuple(name for name,sha in EXPECTED))
-        self.assertEqual(len(list((ROOT/'patches').glob('*.patch'))),15)
+        self.assertEqual(chain,tuple(name for name,sha in EXPECTED)+('0016-v4_22-cc1101-failure-only-snapshots.patch',))
+        self.assertEqual(len(list((ROOT/'patches').glob('*.patch'))),16)
         for name,sha in EXPECTED:
             with self.subTest(name=name):
                 self.assertEqual(blob_sha(ROOT/'patches'/name),sha)

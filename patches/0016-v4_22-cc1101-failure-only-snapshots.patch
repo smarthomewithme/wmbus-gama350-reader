@@ -1,0 +1,44 @@
+diff --git a/components/wmbus_radio/transceiver_cc1101.cpp b/components/wmbus_radio/transceiver_cc1101.cpp
+--- a/components/wmbus_radio/transceiver_cc1101.cpp
++++ b/components/wmbus_radio/transceiver_cc1101.cpp
+@@ -143,4 +143,12 @@
+   this->write_register(CC1101_TEST0, 0x09);
+ 
++  // v4.22: one-time readback BEFORE SCAL/SRX. No radio configuration changes.
++  const uint8_t boot_iocfg0 = this->read_register(CC1101_IOCFG0);
++  const uint8_t boot_fifothr = this->read_register(CC1101_FIFOTHR);
++  const uint8_t boot_mdmcfg4 = this->read_register(CC1101_MDMCFG4);
++  const uint8_t boot_pktctrl0 = this->read_register(CC1101_PKTCTRL0);
++  ESP_LOGI(TAG, "SHWM v4.22 BOOT_CONFIG iocfg0=0x%02X fifothr=0x%02X mdmcfg4=0x%02X pktctrl0=0x%02X",
++           (unsigned) boot_iocfg0, (unsigned) boot_fifothr,
++           (unsigned) boot_mdmcfg4, (unsigned) boot_pktctrl0);
+   ESP_LOGVV(TAG, "calibrating");
+   // Calibrate frequency synthesizer
+@@ -303,7 +303,20 @@
+     if (rxbytes_raw & 0x80) {
++      // v4.22: RX has ALREADY failed. Take read-only SPI + IRQ snapshots
++      // before the existing recovery path, never in successful RX polling.
++      const uint8_t rxbytes_again = this->read_status_register(CC1101_RXBYTES);
++      const uint8_t marcstate_now = this->read_status_register(CC1101_MARCSTATE) & 0x1F;
++      const uint8_t pktstatus_now = this->read_status_register(CC1101_PKTSTATUS);
++      const uint8_t fifo_thr_now = this->read_register(CC1101_FIFOTHR);
++      const uint8_t iocfg0_now = this->read_register(CC1101_IOCFG0);
++      const unsigned int irq_level = this->irq_pin_->digital_read() ? 1u : 0u;
++      ESP_LOGW(TAG, "SHWM v4.22 RX_ERR offset=%lu received=%lu/%lu rx_first=0x%02X rx_second=0x%02X marc=0x%02X pktstatus=0x%02X fifothr=0x%02X iocfg0=0x%02X irq_level=%u", 
++               (unsigned long) offset, (unsigned long) total, (unsigned long) length,
++               (unsigned) rxbytes_raw, (unsigned) rxbytes_again,
++               (unsigned) marcstate_now, (unsigned) pktstatus_now,
++               (unsigned) fifo_thr_now, (unsigned) iocfg0_now, irq_level);
+       // v4.12: single recovery in Radio::receive_frame(), no nested SIDLE/SFRX/SRX.
+       ESP_LOGW(TAG, "SHWM v4.12 RX FIFO overflow: offset=%lu received=%lu/%lu raw=0x%02X ms=%lu",
+                (unsigned long) offset, (unsigned long) total, (unsigned long) length,
+                (unsigned) rxbytes_raw, (unsigned long) (millis() - started_at));
+       return false;
+     }
+diff --git a/components/wmbus_radio/component.cpp b/components/wmbus_radio/component.cpp
+--- a/components/wmbus_radio/component.cpp
++++ b/components/wmbus_radio/component.cpp
+@@ -36,2 +36,3 @@
+   ESP_LOGI(TAG, "SHWM wMBus v4.17 ACTIVE: midpoint 100us long no-progress polling; v4.16 preserved");
++  ESP_LOGI(TAG, "SHWM wMBus v4.22 ACTIVE: failure-only CC1101 state snapshots; v4.17 timing preserved");
+   ESP_LOGI(TAG, "Receiver task created [%p]", this->receiver_task_handle_);

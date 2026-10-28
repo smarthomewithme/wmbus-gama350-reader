@@ -1,7 +1,7 @@
 name: Official CC1101 v4 validation (no flash)
 on:
   push:
-    branches: [release/v4-radio-diagnostics, experiment/v4.4-stale-irq-clear, experiment/v4.5-isr-woken-init, experiment/v4.9-stable-marcstate-eof, experiment/v4.10-five-minute-rx-diag, experiment/v4.11-rxbytes65-prefetch, experiment/v4.12-overflow-fastpath, experiment/v4.13-progress-poll, experiment/v4.14-prealloc-irq, experiment/v4.16-long-idle-poll, experiment/v4.17-midpoint-long-poll, experiment/v4.21-verbatim-v417-control, main]
+    branches: [release/v4-radio-diagnostics, experiment/v4.4-stale-irq-clear, experiment/v4.5-isr-woken-init, experiment/v4.9-stable-marcstate-eof, experiment/v4.10-five-minute-rx-diag, experiment/v4.11-rxbytes65-prefetch, experiment/v4.12-overflow-fastpath, experiment/v4.13-progress-poll, experiment/v4.14-prealloc-irq, experiment/v4.16-long-idle-poll, experiment/v4.17-midpoint-long-poll, experiment/v4.21-verbatim-v417-control, experiment/v4.22-error-snapshots, main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -19,7 +19,7 @@ jobs:
           python-version: '3.12'
       - name: Run native regression tests
         run: bash scripts/test.sh
-      - name: Prepare pinned upstream plus fifteen patches (v4.9-v4.14+v4.16+v4.17)
+      - name: Prepare pinned upstream plus sixteen patches (v4.9-v4.14+v4.16+v4.17+v4.22)
         run: bash scripts/prepare_cc1101_v4.sh
       - name: Verify release integrity
         run: |
@@ -54,6 +54,9 @@ jobs:
           assert 'SHWM wMBus v4.14 ACTIVE' in radio
           assert 'SHWM wMBus v4.16 ACTIVE' in radio
           assert 'SHWM wMBus v4.17 ACTIVE' in radio
+          assert 'SHWM wMBus v4.22 ACTIVE' in radio
+          assert 'SHWM v4.22 RX_ERR' in driver
+          assert 'SHWM v4.22 BOOT_CONFIG' in driver
           assert 'SHWM wMBus v4.15 ACTIVE' not in radio
           method = radio.split('void Radio::receive_frame() {',1)[1].split('void Radio::receiver_task(',1)[0]
           assert method.count('std::make_unique<Packet>()') == 1
