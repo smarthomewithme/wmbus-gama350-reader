@@ -1,0 +1,46 @@
+name: v4.27 passive GAMA/3of6 diagnostics (radio frozen v4.9)
+on:
+  push:
+    branches: [diagnostics/v4.27-v49-passive-observer]
+  pull_request:
+    branches: [experiment/v4.9-stable-marcstate-eof]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  collector-and-scope:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Prove v4.9 radio code, patches, bootstraps and YAML are unmodified
+        run: |
+          git diff --exit-code 11b09de7f87ade632453f772c37940dbdb470c94 HEAD -- components patches config scripts/prepare_cc1101_v4.sh
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('components/_bootstrap_v4.py').read_text()
+          assert 'shwm-wmbus-v4.9-stable-marcstate-eof-v1' in p
+          assert p.count('0008-v4_9-confirm-marcstate-eof.patch')==1
+          assert 'RX_DIAG cumulative' in Path('patches/0004-radio-diagnostics-and-key-redaction.patch').read_text()
+          PY
+      - name: All passive analyzer tests
+        run: python -m unittest discover -s tests -p 'test_v427_passive.py' -v
+      - name: Parse synthetic fixture in native CLI and inspect only report outputs
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          Path('/tmp/v427-demo.log').write_text(
+            '[19:00:00.010][D][CC1101:401][radio_recv]: Long RX: bytes=326 bursts=30 peak_fifo=40 ms=25 rssi=-71 unstable_rxbytes=0\n'
+            '[19:00:00.050][I][main:687]: Telegram otrzymany od licznika prądu!\n'
+            '[19:01:00.010][D][CC1101:401][radio_recv]: Long RX: bytes=326 bursts=30 peak_fifo=40 ms=25 rssi=-71 unstable_rxbytes=0\n'
+            '[19:01:00.050][W][3of6:044]: Long frame 3of6 error: encoded_byte=3/326 symbol=5\n')
+          PY
+          python scripts/analyze_v427.py --input /tmp/v427-demo.log --out /tmp/v427-demo
+          grep -q 'NO FULL FRAME OBSERVED' /tmp/v427-demo/report.md
+          grep -q 'encoded_byte' /tmp/v427-demo/errors_3of6.csv
+      - name: Static syntax validation
+        run: python -m py_compile scripts/analyze_v427.py tests/test_v427_passive.py
