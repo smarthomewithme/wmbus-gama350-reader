@@ -1,7 +1,7 @@
 name: Official CC1101 v4 validation (no flash)
 on:
   push:
-    branches: [release/v4-radio-diagnostics, experiment/v4.4-stale-irq-clear, experiment/v4.5-isr-woken-init, experiment/v4.9-stable-marcstate-eof, main]
+    branches: [release/v4-radio-diagnostics, experiment/v4.4-stale-irq-clear, experiment/v4.5-isr-woken-init, experiment/v4.9-stable-marcstate-eof, experiment/v4.26-v49-rxbytes65-only, main]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -19,7 +19,7 @@ jobs:
           python-version: '3.12'
       - name: Run native regression tests
         run: bash scripts/test.sh
-      - name: Prepare pinned upstream plus eight patches (v4.5 + v4.9)
+      - name: Prepare exact v4.9 + isolated v4.26 RXBYTES65 patch
         run: bash scripts/prepare_cc1101_v4.sh
       - name: Verify release integrity
         run: |
@@ -37,6 +37,9 @@ jobs:
           assert 'SHWM v4.1 FIFO16 experiment' in driver
           assert 'RF_DIAG bytes=' in driver
           assert 'SHWM v4.9 MARCSTATE EOF confirmation' in driver
+          assert 'rx_fifo_incomplete_read(available, remaining)' in driver
+          assert 'rx_fifo_complete_read(confirmed & 0x7F, remaining)' in driver
+          assert 'kCc1101MaxReportedRxBytes = 65' in (src/'wmbus_radio/cc1101_fifo.h').read_text()
           assert 'confirm_marcstate_eof(' in driver
           assert 'inline bool confirm_marcstate_eof(' in (src/'wmbus_radio/cc1101_fifo.h').read_text()
           assert 'unstable_rxbytes=' in driver
@@ -64,6 +67,12 @@ jobs:
             -I vendor/cc1101_v4/components/wmbus_radio \
             tests/v49_marcstate_eof.cpp -o /tmp/shwm-v49-marcstate-test
           ASAN_OPTIONS=detect_leaks=0 /tmp/shwm-v49-marcstate-test
+      - name: Test 65-byte RXBYTES single-burst bounds (native ASan/UBSan)
+        run: |
+          g++ -std=c++17 -O1 -g -Wall -Wextra -Werror -fsanitize=address,undefined -fno-omit-frame-pointer \
+            -I vendor/cc1101_v4/components/wmbus_radio \
+            tests/v426_fifo_prefetch.cpp -o /tmp/v426-rx65-test
+          ASAN_OPTIONS=detect_leaks=0 /tmp/v426-rx65-test
       - name: Generate isolated CI config and synthetic secrets
         run: |
           python - <<'PY'
@@ -89,8 +98,8 @@ jobs:
               ''.join(f'{k}: "{v}"\n' for k, v in keys.items())
           )
           PY
-      - name: Install ESPHome 2026.10.0
-        run: python -m pip install 'esphome==2026.10.0'
+      - name: Install ESPHome 2026.10.1
+        run: python -m pip install 'esphome==2026.10.1'
       - name: Validate and compile v4 example without flashing
         run: |
           esphome config config/wmbus-gama350-v4.yaml
