@@ -37,7 +37,8 @@ _PATCHES = (
     "0014-v4_16-long-no-progress-short-poll.patch",
     "0015-v4_17-midpoint-long-idle-poll.patch",
 )
-_CACHE_LAYOUT = b"shwm-wmbus-v4.17-midpoint-long-poll-v1\n"
+# Historical reference (test fixtures): shwm-wmbus-v4.17-midpoint-long-poll-v1
+_CACHE_LAYOUT = b"shwm-wmbus-v4.21-verbatim-v417-control-v1\n"
 _SHIM_SENTINEL = "_shwm_wmbus_v4_bootstrap"
 
 
@@ -229,7 +230,7 @@ def ensure_v4_components(repo_root: Path) -> Path:
         if not _ready_except_manifest(components_root, cache_root):
             raise RuntimeError("wMBus v4 components did not pass post-install checks")
         (cache_root / "manifest.sha256").write_text(fingerprint + "\n", encoding="ascii")
-        _LOGGER.info("SHWM v4.17 midpoint long poll prepared from v4.16; 100us no-progress, 100us unstable wait retained; RF unchanged.")
+        _LOGGER.info("SHWM v4.21 CONTROL: exact v4.17 source and 15 patches; fresh cache fingerprint; no runtime changes.")
         return cache_root
 
 
