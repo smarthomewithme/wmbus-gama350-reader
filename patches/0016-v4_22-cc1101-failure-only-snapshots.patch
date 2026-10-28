@@ -24,7 +24,7 @@ diff --git a/components/wmbus_radio/transceiver_cc1101.cpp b/components/wmbus_ra
 +      const uint8_t fifo_thr_now = this->read_register(CC1101_FIFOTHR);
 +      const uint8_t iocfg0_now = this->read_register(CC1101_IOCFG0);
 +      const unsigned int irq_level = this->irq_pin_->digital_read() ? 1u : 0u;
-+      ESP_LOGW(TAG, "SHWM v4.22 RX_ERR offset=%lu received=%lu/%lu rx_first=0x%02X rx_second=0x%02X marc=0x%02X pktstatus=0x%02X fifothr=0x%02X iocfg0=0x%02X irq_level=%u", 
++      ESP_LOGW(TAG, "SHWM v4.22 RX_ERR offset=%lu received=%lu/%lu rx_first=0x%02X rx_second=0x%02X marc=0x%02X pktstatus=0x%02X fifothr=0x%02X iocfg0=0x%02X irq_level=%u",
 +               (unsigned long) offset, (unsigned long) total, (unsigned long) length,
 +               (unsigned) rxbytes_raw, (unsigned) rxbytes_again,
 +               (unsigned) marcstate_now, (unsigned) pktstatus_now,
