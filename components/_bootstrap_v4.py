@@ -29,8 +29,9 @@ _PATCHES = (
     "0006-v4_4-clear-stale-irq.patch",
     "0007-v4_5-initialize-isr-woken.patch",
     "0008-v4_9-confirm-marcstate-eof.patch",
+    "0009-v4_25a-v410-deferred-diagnostics.patch",
 )
-_CACHE_LAYOUT = b"shwm-wmbus-v4.9-stable-marcstate-eof-v1\n"
+_CACHE_LAYOUT = b"shwm-wmbus-v4.25a-v49-diagnostics-only-v1\n"
 _SHIM_SENTINEL = "_shwm_wmbus_v4_bootstrap"
 
 
@@ -82,7 +83,8 @@ def _ready(components_root: Path, cache_root: Path, fingerprint: str) -> bool:
     meter = components_root / "wmbus_meter" / "wmbus_meter.cpp"
     component = components_root / "wmbus_radio" / "component.cpp"
     fifo = components_root / "wmbus_radio" / "cc1101_fifo.h"
-    if not all(p.is_file() for p in (radio, meter, component, fifo)):
+    diag = components_root / "wmbus_radio" / "rx_diag_window.h"
+    if not all(p.is_file() for p in (radio, meter, component, fifo, diag)):
         return False
     return ("SHWM v4.1 FIFO16 experiment" in radio.read_text(encoding="utf-8")
             and "CC1101_FIFOTHR, 0x03" in radio.read_text(encoding="utf-8")
@@ -91,6 +93,8 @@ def _ready(components_root: Path, cache_root: Path, fingerprint: str) -> bool:
             and "confirm_marcstate_eof(" in radio.read_text(encoding="utf-8")
             and "inline bool confirm_marcstate_eof(" in fifo.read_text(encoding="utf-8")
             and "Key: [REDACTED]" in meter.read_text(encoding="utf-8")
+            and "RX_DIAG_5M" in component.read_text(encoding="utf-8")
+            and "frame_conversion_failed_" in component.read_text(encoding="utf-8")
             and "RX_DIAG cumulative" in component.read_text(encoding="utf-8")
             and "SHWM v4.4 stale IRQ clear" in component.read_text(encoding="utf-8")
             and "BaseType_t xHigherPriorityTaskWoken = pdFALSE;" in component.read_text(encoding="utf-8"))
@@ -157,6 +161,10 @@ def ensure_v4_components(repo_root: Path) -> Path:
                     "CC1101_FIFOTHR, 0x03" not in radio_text or
                     "CC1101_FIFOTHR, 0x07" in radio_text or
                     "SHWM v4.1 FIFO16 experiment" not in radio_text or
+                    "RX_DIAG_5M" not in
+                    (checkout / "components/wmbus_radio/component.cpp").read_text(encoding="utf-8") or
+                    "frame_conversion_failed_" not in
+                    (checkout / "components/wmbus_radio/component.cpp").read_text(encoding="utf-8") or
                     "RX_DIAG cumulative" not in
                     (checkout / "components/wmbus_radio/component.cpp").read_text(encoding="utf-8") or
                     "SHWM v4.4 stale IRQ clear" not in
@@ -186,7 +194,7 @@ def ensure_v4_components(repo_root: Path) -> Path:
         if not _ready_except_manifest(components_root, cache_root):
             raise RuntimeError("wMBus v4 components did not pass post-install checks")
         (cache_root / "manifest.sha256").write_text(fingerprint + "\n", encoding="ascii")
-        _LOGGER.info("CC1101 v4.9 MARCSTATE EOF confirmation experiment ready; exact v4.5 FIFO16/ISR baseline preserved; AES keys redacted.")
+        _LOGGER.info("SHWM v4.25a DIAGNOSTICS ONLY: v4.10 five-minute main-loop window; unchanged original v4.9 CC1101/IRQ/polling/Packet timing.")
         return cache_root
 
 
@@ -205,11 +213,14 @@ def _ready_except_manifest(components_root: Path, cache_root: Path) -> bool:
     component = components_root / "wmbus_radio" / "component.cpp"
     meter = components_root / "wmbus_meter" / "wmbus_meter.cpp"
     fifo = components_root / "wmbus_radio" / "cc1101_fifo.h"
-    return (all(p.is_file() for p in (radio, component, meter, fifo))
+    diag = components_root / "wmbus_radio" / "rx_diag_window.h"
+    return (all(p.is_file() for p in (radio, component, meter, fifo, diag))
             and "RF_DIAG bytes=" in radio.read_text(encoding="utf-8")
             and "SHWM v4.9 MARCSTATE EOF confirmation" in radio.read_text(encoding="utf-8")
             and "confirm_marcstate_eof(" in radio.read_text(encoding="utf-8")
             and "inline bool confirm_marcstate_eof(" in fifo.read_text(encoding="utf-8")
+            and "RX_DIAG_5M" in component.read_text(encoding="utf-8")
+            and "frame_conversion_failed_" in component.read_text(encoding="utf-8")
             and "RX_DIAG cumulative" in component.read_text(encoding="utf-8")
             and "SHWM v4.4 stale IRQ clear" in component.read_text(encoding="utf-8")
             and "BaseType_t xHigherPriorityTaskWoken = pdFALSE;" in component.read_text(encoding="utf-8")
