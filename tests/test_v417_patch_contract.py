@@ -24,7 +24,7 @@ class TestV417Scope(unittest.TestCase):
             self.assertLess(x.index("0014-v4_16-long-no-progress-short-poll.patch"),x.index(PATCH.name))
             self.assertNotIn("0014-v4_15",x)
             self.assertIn("SHWM wMBus v4.17 ACTIVE",x)
-        self.assertIn("shwm-wmbus-v4.17-midpoint-long-poll-v1",boot)
+        self.assertIn("shwm-wmbus-v4.20-post-progress-75us-v1",boot)
         self.assertTrue((ROOT/"tests/v417_midpoint_poll.cpp").exists())
         for p in (ROOT/".github/workflows/official-v4.yml",ROOT/".github/workflows/direct-esphome-install.yml"):
             t=p.read_text()

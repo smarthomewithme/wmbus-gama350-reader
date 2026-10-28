@@ -38,7 +38,7 @@ class TestV413ProgressPolling(unittest.TestCase):
             self.assertLess(source.index("0011-v4_12-overflow-fastpath.patch"),
                             source.index(PATCH.name))
             self.assertIn(PATCH.name, source)
-        self.assertIn("shwm-wmbus-v4.17-midpoint-long-poll-v1", b)
+        self.assertIn("shwm-wmbus-v4.20-post-progress-75us-v1", b)
         self.assertIn("SHWM v4.13 post-drain polling", b)
         self.assertIn("rx_should_backoff_after_drain(made_progress)", sh)
         self.assertTrue((ROOT / "tests/v413_receive_backoff.cpp").exists())

@@ -1,0 +1,39 @@
+diff --git a/components/wmbus_radio/cc1101_fifo.h b/components/wmbus_radio/cc1101_fifo.h
+--- a/components/wmbus_radio/cc1101_fifo.h
++++ b/components/wmbus_radio/cc1101_fifo.h
+@@ -65,4 +65,12 @@
+                                        : rx_no_progress_backoff_us(offset, length);
+ }
+ 
++// SHWM v4.20: cautiously coalesce small successful FIFO bursts for long payloads.
++// Leave short/header paths and v4.17 no-progress policy untouched.
++inline constexpr unsigned int rx_v420_post_progress_wait_us(uint32_t offset,
++                                                            std::size_t length,
++                                                            bool made_progress) {
++  return made_progress && offset == 3u && length >= 250u ? 75u : 0u;
++}
++
+ // CC1101 RXBYTES is asynchronous to SPI. Require two consecutive equal reads.
+diff --git a/components/wmbus_radio/transceiver_cc1101.cpp b/components/wmbus_radio/transceiver_cc1101.cpp
+--- a/components/wmbus_radio/transceiver_cc1101.cpp
++++ b/components/wmbus_radio/transceiver_cc1101.cpp
+@@ -400,5 +400,9 @@
+     // SHWM v4.16: only no-progress polls wait; 50us for long payloads.
+     // SHWM v4.17: midpoint 100us on no-progress long payload only.
+-    if (rx_should_backoff_after_drain(made_progress))
++    // SHWM v4.20: 75us only AFTER a successful long-payload FIFO burst.
++    // Short frames and all no-progress waits use the exact v4.17 paths.
++    const unsigned int progress_wait_us = rx_v420_post_progress_wait_us(offset, length, made_progress);
++    if (progress_wait_us != 0u)
++      delayMicroseconds(progress_wait_us);
++    else if (rx_should_backoff_after_drain(made_progress))
+       delayMicroseconds(rx_v417_no_progress_backoff_us(offset, length));
+   }
+diff --git a/components/wmbus_radio/component.cpp b/components/wmbus_radio/component.cpp
+--- a/components/wmbus_radio/component.cpp
++++ b/components/wmbus_radio/component.cpp
+@@ -37,3 +37,4 @@
+   ESP_LOGI(TAG, "SHWM wMBus v4.16 ACTIVE: 50us no-progress polls for long payloads; 100us unstable backoff kept");
+   ESP_LOGI(TAG, "SHWM wMBus v4.17 ACTIVE: midpoint 100us long no-progress polling; v4.16 preserved");
++  ESP_LOGI(TAG, "SHWM wMBus v4.20 ACTIVE: 75us post-progress long FIFO coalescing; v4.17 other timing preserved");
+   ESP_LOGI(TAG, "Receiver task created [%p]", this->receiver_task_handle_);

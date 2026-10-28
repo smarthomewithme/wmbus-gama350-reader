@@ -35,7 +35,8 @@ for name in \
   0012-v4_13-progress-poll.patch \
   0013-v4_14-preallocate-packet-before-irq.patch \
   0014-v4_16-long-no-progress-short-poll.patch \
-  0015-v4_17-midpoint-long-idle-poll.patch; do
+  0015-v4_17-midpoint-long-idle-poll.patch \
+  0016-v4_20-post-progress-coalesce-75us.patch; do
   git -C "$DEST" apply --check "$PATCHES/$name"
   git -C "$DEST" apply "$PATCHES/$name"
 done
@@ -59,6 +60,8 @@ grep -Fq 'SHWM v4.12 RX FIFO overflow' "$RADIO"
 grep -Fq 'SHWM v4.13 post-drain polling' "$RADIO"
 grep -Fq 'rx_should_backoff_after_drain(made_progress)' "$RADIO"
 grep -Fq 'rx_v417_no_progress_backoff_us(offset, length)' "$RADIO"
+grep -Fq 'rx_v420_post_progress_wait_us(offset, length, made_progress)' "$RADIO"
+grep -Fq 'inline constexpr unsigned int rx_v420_post_progress_wait_us(' "$DEST/components/wmbus_radio/cc1101_fifo.h"
 grep -Fq 'inline constexpr unsigned int rx_v417_no_progress_backoff_us(' "$DEST/components/wmbus_radio/cc1101_fifo.h"
 grep -Fq 'inline constexpr unsigned int rx_no_progress_backoff_us(' "$DEST/components/wmbus_radio/cc1101_fifo.h"
 grep -Fq 'delayMicroseconds(100);' "$RADIO"
@@ -67,6 +70,7 @@ grep -Fq 'SHWM wMBus v4.13 ACTIVE' "$DEST/components/wmbus_radio/component.cpp"
 grep -Fq 'SHWM wMBus v4.14 ACTIVE' "$DEST/components/wmbus_radio/component.cpp"
 grep -Fq 'SHWM wMBus v4.16 ACTIVE' "$DEST/components/wmbus_radio/component.cpp"
 grep -Fq 'SHWM wMBus v4.17 ACTIVE' "$DEST/components/wmbus_radio/component.cpp"
+grep -Fq 'SHWM wMBus v4.20 ACTIVE' "$DEST/components/wmbus_radio/component.cpp"
 grep -Fq 'SHWM v4.14 packet preallocation' "$DEST/components/wmbus_radio/component.cpp"
 grep -Fq 'SHWM v4.12 RX_DIAG_1M' "$DEST/components/wmbus_radio/component.cpp"
 grep -Fq 'RF_DIAG bytes=' "$RADIO"
@@ -79,8 +83,8 @@ grep -Fq 'BaseType_t xHigherPriorityTaskWoken = pdFALSE;' "$DEST/components/wmbu
 grep -Fq 'Key: [REDACTED]' "$METER"
 ! grep -Fq 'Key: %s' "$METER"
 
-echo "CC1101 v4.17 midpoint 100us poll experiment prepared: $DEST/components"
+echo "CC1101 v4.20 post-progress 75us coalescing experiment prepared: $DEST/components"
 echo "Pinned upstream: $PIN"
-echo "Radio BW: 325 kHz; RX FIFO threshold 16B; v4.9 MARCSTATE confirmation retained; RXBYTES=65 supported; v4.13 progress polling retained; packet constructed before IRQ wait; 100us long no-progress, 100us unstable backoff preserved."
+echo "Radio BW: 325 kHz; RX FIFO threshold 16B; v4.9 MARCSTATE confirmation retained; RXBYTES=65 supported; v4.13 progress polling retained; packet constructed before IRQ wait; 75us after successful long burst; 100us long no-progress, 100us unstable backoff preserved."
 echo "Plaintext AES startup logging disabled. No YAML or firmware modified."
 git -C "$DEST" diff --stat
