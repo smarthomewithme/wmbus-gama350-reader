@@ -159,8 +159,8 @@ jobs:
               ''.join(f'{k}: "{v}"\n' for k, v in keys.items())
           )
           PY
-      - name: Install ESPHome 2026.10.0
-        run: python -m pip install 'esphome==2026.10.0'
+      - name: Install ESPHome 2026.10.1
+        run: python -m pip install 'esphome==2026.10.1'
       - name: Validate and compile v4 example without flashing
         run: |
           esphome config config/wmbus-gama350-v4.yaml
