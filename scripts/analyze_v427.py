@@ -25,31 +25,45 @@ def rounded_median(values):
     return round(statistics.median(values), 3) if values else None
 
 def parse_logs(paths):
-    # Re-exported log windows often repeat all previous lines. Deduplicate them
-    # by clock+body, not by timestamp alone (multiple events share one millisecond).
+    """Read one chronological capture (possibly spanning one midnight).
+
+    Re-exported overlapping files can be deduplicated. Independent undated
+    captures after midnight must first be combined in chronological order.
+    """
     seen = set()
     ordered = []
+    day_ms = 86400000
     for path in paths:
+        previous_clock = None
+        rollover_days = 0
         for raw in Path(path).read_text(encoding="utf-8", errors="replace").splitlines():
             m = CLOCK.search(raw)
             if not m:
                 continue
-            sec = ((int(m[1])*60+int(m[2]))*60+int(m[3]))*1000+int(m[4])
+            current_clock = ((int(m[1])*60+int(m[2]))*60+int(m[3]))*1000+int(m[4])
+            if previous_clock is not None and current_clock < previous_clock:
+                if previous_clock - current_clock > 12 * 3600 * 1000:
+                    rollover_days += 1
+                else:
+                    raise ValueError(f"Log out of time order in {path}; cannot infer date")
+            previous_clock = current_clock
+            if rollover_days > 1:
+                raise ValueError("More than one midnight rollover; split by day")
+            elapsed = current_clock + rollover_days * day_ms
             body = raw[m.end():].strip()
-            key = (sec, body)
+            key = (elapsed, body)
             if key not in seen:
                 seen.add(key)
-                ordered.append((sec, body))
+                ordered.append((elapsed, body))
     ordered.sort(key=lambda x: x[0])
-    # Normal use is a same-day log. A day rollover in concatenated files can be
-    # ambiguous; refuse silently wrong timing rather than invent elapsed days.
-    if ordered and ordered[-1][0]-ordered[0][0] > 20*3600*1000:
-        raise ValueError("Log may cross midnight: split analysis into day-scoped files.")
+    if ordered and ordered[-1][0] - ordered[0][0] > day_ms:
+        raise ValueError("Over 24h without absolute dates: split by day")
     return ordered
 
 def clock_str(ms):
-    ms %= 86400000
-    return f"{ms//3600000:02d}:{ms//60000%60:02d}:{ms//1000%60:02d}.{ms%1000:03d}"
+    day, rem = divmod(ms, 86400000)
+    prefix = f"+{day}d " if day else ""
+    return f"{prefix}{rem//3600000:02d}:{rem//60000%60:02d}:{rem//1000%60:02d}.{rem%1000:03d}"
 
 def nearest_distance(ms, points):
     return min((abs(ms-x) for x in points), default=None)
@@ -144,6 +158,7 @@ def analyze(rows, period_s=30.0, tolerance_ms=2000):
     stats = dict(
         log_start=clock_str(rows[0][0]),log_end=clock_str(rows[-1][0]),
         duration_s=round((rows[-1][0]-rows[0][0])/1000,3),
+        calendar_rollovers=rows[-1][0]//86400000-rows[0][0]//86400000,
         long_frames_326=len(frames),
         gama_decoded=sum(f["status"]=="decoded" for f in frames),
         gama_3of6_errors=len(errors),
@@ -179,11 +194,13 @@ def write_reports(output,stats,slots,errors):
     line=[
         "# v4.27 passive diagnostic report (v4.9 receiver unchanged)",
         f"Window: {stats['log_start']}–{stats['log_end']} ({stats['duration_s']}s)",
+        f"Midnight rollovers: {stats['calendar_rollovers']}.",
         f"Full GAMA 326B radio frames: **{stats['long_frames_326']}**; decoded: **{stats['gama_decoded']}**; 3of6 errors: **{stats['gama_3of6_errors']}**.",
         f"Decoded FULL frames: {stats['full_frame_decode_pct']}% (NOT percentage of actual transmissions).",
         f"Apator decoded: {stats['water_telegrams']}; median interval: {stats['water_median_gap_s']}s.",
         f"Nominal {stats['nominal_period_s']}s slots: **{stats['nominal_slots']}**, decoded {stats['nominal_slots_decoded']}, 3of6 {stats['nominal_slots_with_3of6']}, **NO FULL FRAME OBSERVED {stats['nominal_slots_without_full_frame']}**.",
         f"Actual FIFO overflow: {stats['rx_fifo_overflows']}; RXBYTES65 warnings: {stats['rxbytes65_warnings']}; header 0-byte timeout: {stats['header_zero_byte_timeouts']}.",
+        f"Last cumulative all-meter RX: {stats['last_irq_cumulative']}.",
         "",
         "## Interpret with care",
         "- NO FULL FRAME OBSERVED means *we lack a logged complete frame*, not evidence the transmitter sent and receiver lost it.",
@@ -191,6 +208,7 @@ def write_reports(output,stats,slots,errors):
         "- The 3of6 position/symbol and preceding RF_DIAG raw fields are correlations, not proof of RF origin.",
         "- RF_DIAG lqi_raw is the uncalibrated/raw diagnostic, not a guaranteed signal quality percentage.",
         "- Radio IRQ counters aggregate all meters. A missing expected GAMA slot cannot be inferred from total IRQ delta alone.",
+        "- Cumulative payload_fail counts any short or long meter packet; it is not a GAMA-only 3of6 counter.",
         "- This analysis does NOT store telegram contents, meter IDs, AES keys, IP addresses, sensor readings or SSIDs.",
         "- Multiple overlapping exports are de-duplicated by clock and line content. Split logs by day at midnight.",
         "",

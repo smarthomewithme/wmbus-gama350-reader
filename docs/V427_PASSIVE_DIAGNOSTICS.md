@@ -25,6 +25,17 @@ py -3 scripts\analyze_v427.py --input "C:\Users\Public\gama-log.txt" --out "C:\U
 
 Generated files: `report.md`, `summary.json`, `gama_slots.csv` and `errors_3of6.csv`. No raw packet data, meter IDs, Wi-Fi identifiers, secrets or decrypted readings are written in the report. Raw user-provided log stays local.
 
+### Logs crossing midnight
+
+The passive tool now supports a **single continuous export across midnight**
+(23:59 → 00:25). It keeps original chronological order and prefixes next-day
+times with `+1d`. Re-exported overlapping files from the same session can be
+provided with repeated `--input`. Do not supply independent undated logs
+from different calendar days as separate files: first make one chronologically
+ordered capture, or split analysis by day. The report includes the latest
+all-meter `payload_fail` and `queue_drops` cumulative counters. These
+cannot be attributed to a particular meter from the counters alone.
+
 ### If you want to explicitly select this branch in ESPHome
 
 ```yaml

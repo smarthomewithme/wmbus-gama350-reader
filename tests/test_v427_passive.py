@@ -39,6 +39,36 @@ class TestPassiveV427(unittest.TestCase):
             self.assertTrue((Path(t)/"out"/"report.md").is_file())
             self.assertTrue((Path(t)/"out"/"errors_3of6.csv").is_file())
             self.assertNotIn("secret", (Path(t)/"out"/"report.md").read_text())
+
+    def test_midnight_rollover_is_real_next_day(self):
+        log="""[23:59:35.900][D][CC1101:402][radio_recv]: RF_DIAG bytes=326 freqest_raw=11 lqi_raw=128 marcstate=0x0D
+[23:59:35.910][D][CC1101:405][radio_recv]: Long RX: bytes=326 bursts=32 peak_fifo=37 ms=25 rssi=-71 unstable_rxbytes=0
+[23:59:35.920][I][main:687]: Telegram otrzymany od licznika prądu!
+[00:00:35.900][D][CC1101:402][radio_recv]: RF_DIAG bytes=326 freqest_raw=12 lqi_raw=245 marcstate=0x0D
+[00:00:35.910][D][CC1101:405][radio_recv]: Long RX: bytes=326 bursts=32 peak_fifo=38 ms=25 rssi=-70 unstable_rxbytes=0
+[00:00:35.920][W][3of6:044]: Long frame 3of6 error: encoded_byte=61/326 symbol=82
+[00:00:36.000][I][wmbus:048]: RX_DIAG cumulative irq_notifications=11 header_ok=11 header_fail=0 payload_ok=10 payload_fail=1 long_radio_frames=2 queue_drops=0
+"""
+        with tempfile.TemporaryDirectory() as t:
+            p=Path(t)/"midnight.log";p.write_text(log)
+            rows=mod.parse_logs([p,p])
+            self.assertEqual(len(rows),7)
+            self.assertTrue(all(rows[i][0]<=rows[i+1][0] for i in range(6)))
+            self.assertEqual(mod.clock_str(rows[-1][0]),"+1d 00:00:36.000")
+            s,slots,errors=mod.analyze(rows)
+            self.assertEqual((s["calendar_rollovers"],s["long_frames_326"],s["gama_decoded"],s["gama_3of6_errors"]),(1,2,1,1))
+            self.assertEqual([q["status"] for q in slots],["decoded","NO_FULL_FRAME_OBSERVED","3of6_error"])
+            self.assertEqual(errors[0]["time"],"+1d 00:00:35.910")
+            self.assertEqual(s["last_irq_cumulative"]["payload_fail"],1)
+            mod.write_reports(Path(t)/"result",s,slots,errors)
+            self.assertIn("Midnight rollovers: 1",(Path(t)/"result"/"report.md").read_text())
+
+    def test_backward_clock_without_midnight_rejected(self):
+        with tempfile.TemporaryDirectory() as t:
+            p=Path(t)/"bad.log"
+            p.write_text("[12:02:10.123] A\\n[12:01:10.123] B\\n")
+            with self.assertRaises(ValueError): mod.parse_logs([p])
+
     def test_no_firmware_events(self):
         with self.assertRaises(ValueError):
             mod.analyze([])
