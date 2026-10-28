@@ -66,7 +66,7 @@ class TestPassiveV427(unittest.TestCase):
     def test_backward_clock_without_midnight_rejected(self):
         with tempfile.TemporaryDirectory() as t:
             p=Path(t)/"bad.log"
-            p.write_text("[12:02:10.123] A\\n[12:01:10.123] B\\n")
+            p.write_text("[12:02:10.123] A\n[12:01:10.123] B\n")
             with self.assertRaises(ValueError): mod.parse_logs([p])
 
     def test_no_firmware_events(self):
