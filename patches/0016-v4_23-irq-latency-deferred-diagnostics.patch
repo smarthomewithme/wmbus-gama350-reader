@@ -1,0 +1,66 @@
+diff --git a/components/wmbus_radio/component.cpp b/components/wmbus_radio/component.cpp
+--- a/components/wmbus_radio/component.cpp
++++ b/components/wmbus_radio/component.cpp
+@@ -1,5 +1,6 @@
+ #include "component.h"
+ 
++#include "esp_timer.h"
+ #include "freertos/queue.h"
+ #include "freertos/task.h"
+ 
+@@ -20,6 +21,13 @@
+ namespace esphome {
+ namespace wmbus_radio {
+ static const char *TAG = "wmbus";
++// v4.23: per-device IRQ timestamp (a single Radio instance). All updates
++// are 32-bit atomics; no SPI or logging in the ISR/high-priority path.
++static std::atomic<uint32_t> shwm_last_irq_us{0};
++static std::atomic<uint32_t> shwm_irq_latency_latest_us{0};
++static std::atomic<uint32_t> shwm_irq_latency_max_us{0};
++static std::atomic<uint32_t> shwm_irq_coalesced{0};
+ 
+ void Radio::setup() {
+@@ -37,3 +45,4 @@
+   ESP_LOGI(TAG, "SHWM wMBus v4.17 ACTIVE: midpoint 100us long no-progress polling; v4.16 preserved");
++  ESP_LOGI(TAG, "SHWM wMBus v4.23 ACTIVE: lightweight IRQ wake latency (main-loop logs only)");
+   ESP_LOGI(TAG, "Receiver task created [%p]", this->receiver_task_handle_);
+@@ -41,4 +50,16 @@
+ void Radio::loop() {
++  // Deferred, rate-limited diagnostics: NEVER log from the receiver/IRQ.
++  static uint32_t last_irq_latency_log_ms = 0u;
++  const uint32_t diag_now = millis();
++  if ((uint32_t) (diag_now - last_irq_latency_log_ms) >= 60000u) {
++    last_irq_latency_log_ms = diag_now;
++    ESP_LOGI(TAG, "SHWM v4.23 IRQ_LATENCY last_us=%lu max_us=%lu coalesced=%lu",
++             (unsigned long) shwm_irq_latency_latest_us.load(std::memory_order_relaxed),
++             (unsigned long) shwm_irq_latency_max_us.exchange(0u, std::memory_order_relaxed),
++             (unsigned long) shwm_irq_coalesced.exchange(0u, std::memory_order_relaxed));
++  }
+   // GPIO4 interrupts indicate the FIFO threshold, not a confirmed meter.
+   // SHWM v4.10 RX_DIAG_5M retained; v4.12 reports 1-minute windows.
+   const uint32_t now = millis();
+@@ -83,6 +104,7 @@
+ void Radio::wakeup_receiver_task_from_isr(TaskHandle_t *arg) {
+   BaseType_t xHigherPriorityTaskWoken = pdFALSE;
++  shwm_last_irq_us.store((uint32_t) esp_timer_get_time(), std::memory_order_relaxed);
+   vTaskNotifyGiveFromISR(*arg, &xHigherPriorityTaskWoken);
+   portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+ }
+@@ -117,6 +139,19 @@
+   }
+   this->irq_notifications_.fetch_add(notifications, std::memory_order_relaxed);
++  // Use latest ISR timestamp; coalesced IRQs have no unique first-event age.
++  if (notifications > 1u) {
++    shwm_irq_coalesced.fetch_add(notifications - 1u, std::memory_order_relaxed);
++  } else {
++    const uint32_t irq_us = shwm_last_irq_us.load(std::memory_order_relaxed);
++    if (irq_us != 0u) {
++      const uint32_t elapsed = (uint32_t) esp_timer_get_time() - irq_us;
++      shwm_irq_latency_latest_us.store(elapsed, std::memory_order_relaxed);
++      uint32_t peak = shwm_irq_latency_max_us.load(std::memory_order_relaxed);
++      while (elapsed > peak && !shwm_irq_latency_max_us.compare_exchange_weak(
++                 peak, elapsed, std::memory_order_relaxed)) {}
++    }
++  }
+ 
+   auto *header_data = packet->rx_data_ptr();
