@@ -1,0 +1,65 @@
+name: v4.9 vs v4.25a vs v4.25 compiled firmware forensics (NO FLASH)
+on:
+  push:
+    branches: [diagnostics/v49-v425-binary-forensics]
+  workflow_dispatch:
+permissions:
+  contents: read
+
+jobs:
+  compare-pinned:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - name: Read-only harness checkout
+        uses: actions/checkout@v4
+        with:
+          path: harness
+      - name: Checkout known-good v4.9 at exact SHA
+        uses: actions/checkout@v4
+        with:
+          ref: 11b09de7f87ade632453f772c37940dbdb470c94
+          path: control
+      - name: Checkout v4.25a failure at exact SHA
+        uses: actions/checkout@v4
+        with:
+          ref: 7b8c5e948f0c3029372bc999d5b823def7edfd63
+          path: diagnostics
+      - name: Checkout v4.25 combined failure at exact SHA
+        uses: actions/checkout@v4
+        with:
+          ref: 1eae2327ce176592513ede8212bf9eb8b1cec971
+          path: combined
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Exact toolchain pin
+        run: |
+          python -m pip install 'esphome==2026.10.1'
+          esphome version
+      - name: Pin GitHub source refs and identical isolated CI config
+        run: |
+          python harness/scripts/v49_binary_forensics.py prepare control diagnostics combined
+      - name: Compile exact known-good v4.9 (CI only)
+        run: |
+          esphome config control/config/wmbus-gama350-forensics.yaml
+          esphome compile control/config/wmbus-gama350-forensics.yaml
+      - name: Compile exact failed diagnostics-only v4.25a (CI only)
+        run: |
+          esphome config diagnostics/config/wmbus-gama350-forensics.yaml
+          esphome compile diagnostics/config/wmbus-gama350-forensics.yaml
+      - name: Compile exact failed combined v4.25 (CI only)
+        run: |
+          esphome config combined/config/wmbus-gama350-forensics.yaml
+          esphome compile combined/config/wmbus-gama350-forensics.yaml
+      - name: Capture actual radio source, ELF memory, DWARF object layouts and task symbols
+        run: |
+          python harness/scripts/v49_binary_forensics.py compare control diagnostics combined forensic-report.txt
+          cat forensic-report.txt >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload TEXT report only (never upload firmware or secrets)
+        uses: actions/upload-artifact@v4
+        with:
+          name: v49-v425a-v425-compiled-forensics
+          path: forensic-report.txt
+          retention-days: 30
+          if-no-files-found: error
