@@ -17,7 +17,7 @@ diff --git a/components/wmbus_radio/cc1101_fifo.h b/components/wmbus_radio/cc110
 diff --git a/components/wmbus_radio/transceiver_cc1101.cpp b/components/wmbus_radio/transceiver_cc1101.cpp
 --- a/components/wmbus_radio/transceiver_cc1101.cpp
 +++ b/components/wmbus_radio/transceiver_cc1101.cpp
-@@ -400,5 +400,9 @@
+@@ -400,5 +400,10 @@
      // SHWM v4.16: only no-progress polls wait; 50us for long payloads.
      // SHWM v4.17: midpoint 100us on no-progress long payload only.
 -    if (rx_should_backoff_after_drain(made_progress))
