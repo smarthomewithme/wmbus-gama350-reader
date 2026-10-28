@@ -1,0 +1,80 @@
+name: Compare v4.21-v4.23 firmware provenance (no flash)
+on:
+  push:
+    branches: [diagnostics/v421-v423-build-compare]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build-and-compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - name: Checkout read-only comparison harness
+        uses: actions/checkout@v4
+        with:
+          path: harness
+      - name: Checkout verified-good v4.21 at exact commit
+        uses: actions/checkout@v4
+        with:
+          ref: a11d6f8f8efe882351796a981cbeedb73f12071a
+          path: control
+      - name: Checkout failed v4.23 at exact commit
+        uses: actions/checkout@v4
+        with:
+          ref: 1bc91749cb9235ed4c564bbbe162479c26cb3666
+          path: candidate
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Pin same ESPHome version as physical A/B
+        run: |
+          python -m pip install 'esphome==2026.10.1'
+          esphome version
+      - name: Prepare identically configured GitHub component builds
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import base64
+          fake={
+            'wifi_ssid': 'CI-COMPARISON-NO-RADIO',
+            'wifi_password': 'not-a-real-network-password',
+            'api_encryption_key': base64.b64encode(bytes([17])*32).decode(),
+            'ota_password': 'CI-OTA-NEVER-FLASH',
+            'gama350_meter_id': '0x12345678',
+            'apator_meter_id': '0x87654321',
+            'gama350_aes_key': '0123456789abcdef0123456789abcdef',
+            'apator_aes_key': 'abcdef0123456789abcdef0123456789'
+          }
+          for directory,branch in (
+              ('control','experiment/v4.21-verbatim-v417-control'),
+              ('candidate','experiment/v4.23-irq-latency')):
+              p=Path(directory)/'config'
+              source=(p/'wmbus-gama350.yaml').read_text()
+              needle='  - source:\n      type: local\n      path: ../vendor/upstream/components'
+              assert source.count(needle)==1
+              replacement='  - source: github://smarthomewithme/wmbus-gama350-reader@'+branch+'\n    refresh: always'
+              (p/'wmbus-gama350-compare.yaml').write_text(source.replace(needle,replacement))
+              (p/'secrets.yaml').write_text(''.join(f'{k}: "{v}"\n' for k,v in fake.items()))
+          assert (Path('control/config/secrets.yaml').read_bytes()
+                  ==Path('candidate/config/secrets.yaml').read_bytes())
+          PY
+      - name: Validate and build exact v4.21 (no device access)
+        run: |
+          esphome config control/config/wmbus-gama350-compare.yaml
+          esphome compile control/config/wmbus-gama350-compare.yaml
+      - name: Validate and build exact v4.23 (no device access)
+        run: |
+          esphome config candidate/config/wmbus-gama350-compare.yaml
+          esphome compile candidate/config/wmbus-gama350-compare.yaml
+      - name: Verify compiled source diff, capture ELF and binary fingerprints
+        run: |
+          python harness/scripts/compare_v421_v423_builds.py control candidate build-provenance.txt
+          cat build-provenance.txt >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload report only (NO firmware and NO secrets)
+        uses: actions/upload-artifact@v4
+        with:
+          name: cc1101-v421-v423-build-provenance
+          path: build-provenance.txt
+          if-no-files-found: error
+          retention-days: 14
