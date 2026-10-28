@@ -28,7 +28,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install ESPHome
-        run: python -m pip install 'esphome==2026.10.0'
+        run: python -m pip install 'esphome==2026.10.1'
       - name: Generate isolated CI credentials
         run: |
           python - <<'PYTESTKEYS'

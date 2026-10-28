@@ -1,0 +1,21 @@
+diff --git a/components/wmbus_radio/component.cpp b/components/wmbus_radio/component.cpp
+--- a/components/wmbus_radio/component.cpp
++++ b/components/wmbus_radio/component.cpp
+@@ -34,3 +34,3 @@
+-  ESP_LOGI(TAG, "Receiver task created [%p]", this->receiver_task_handle_);
++  ESP_LOGI(TAG, "SHWM v4.25 PREALLOC: receiver task created [%p]", this->receiver_task_handle_);
+ 
+   this->radio->attach_data_interrupt(Radio::wakeup_receiver_task_from_isr,
+@@ -111,10 +111,10 @@ void Radio::receive_frame() {
++  // SHWM v4.25: allocate before waiting for the IRQ notification.
++  auto packet = std::make_unique<Packet>();
+   const uint32_t notifications = ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(60000));
+   if (!notifications) {
+     this->radio->restart_rx();
+     return;
+   }
+   this->irq_notifications_.fetch_add(notifications, std::memory_order_relaxed);
+ 
+-  auto packet = std::make_unique<Packet>();
+-
+   auto *header_data = packet->rx_data_ptr();

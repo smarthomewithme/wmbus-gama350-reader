@@ -1,0 +1,126 @@
+diff --git a/components/wmbus_radio/rx_diag_window.h b/components/wmbus_radio/rx_diag_window.h
+new file mode 100644
+--- /dev/null
++++ b/components/wmbus_radio/rx_diag_window.h
+@@ -0,0 +1,37 @@
++#pragma once
++#include <cstdint>
++
++namespace esphome {
++namespace wmbus_radio {
++
++// Pure counters only: no SPI reads, radio configuration or receiver-task work.
++struct RxDiagSnapshot {
++  uint32_t irq_notifications{0};
++  uint32_t headers_ok{0};
++  uint32_t headers_failed{0};
++  uint32_t payloads_ok{0};
++  uint32_t payloads_failed{0};
++  uint32_t long_radio_frames{0};
++  uint32_t queue_drops{0};
++  uint32_t frame_converted{0};
++  uint32_t frame_conversion_failed{0};
++};
++
++// Unsigned subtraction also handles 32-bit counter rollover.
++inline RxDiagSnapshot rx_diag_delta(const RxDiagSnapshot &now,
++                                    const RxDiagSnapshot &before) {
++  return {
++      now.irq_notifications - before.irq_notifications,
++      now.headers_ok - before.headers_ok,
++      now.headers_failed - before.headers_failed,
++      now.payloads_ok - before.payloads_ok,
++      now.payloads_failed - before.payloads_failed,
++      now.long_radio_frames - before.long_radio_frames,
++      now.queue_drops - before.queue_drops,
++      now.frame_converted - before.frame_converted,
++      now.frame_conversion_failed - before.frame_conversion_failed,
++  };
++}
++
++}  // namespace wmbus_radio
++}  // namespace esphome
+diff --git a/components/wmbus_radio/component.h b/components/wmbus_radio/component.h
+--- a/components/wmbus_radio/component.h
++++ b/components/wmbus_radio/component.h
+@@ -14,2 +14,3 @@
+ #include "packet.h"
++#include "rx_diag_window.h"
+ #include "transceiver.h"
+@@ -45,2 +45,5 @@
+   std::atomic<uint32_t> queue_drops_{0};
++  std::atomic<uint32_t> frame_converted_{0};
++  std::atomic<uint32_t> frame_conversion_failed_{0};
++  RxDiagSnapshot last_diag_window_{};
+   uint32_t last_diag_log_ms_{0};
+diff --git a/components/wmbus_radio/component.cpp b/components/wmbus_radio/component.cpp
+--- a/components/wmbus_radio/component.cpp
++++ b/components/wmbus_radio/component.cpp
+@@ -41,16 +41,41 @@
+ void Radio::loop() {
+-  // GPIO4 interrupts indicate the FIFO threshold, not a confirmed meter.
+-  // Snapshot cumulative counters every five minutes outside the radio task.
+-  const uint32_t now = millis();
+-  if ((uint32_t) (now - this->last_diag_log_ms_) >= 300000u) {
+-    this->last_diag_log_ms_ = now;
+-    ESP_LOGI(TAG, "RX_DIAG cumulative irq_notifications=%lu header_ok=%lu header_fail=%lu payload_ok=%lu payload_fail=%lu long_radio_frames=%lu queue_drops=%lu",
+-             (unsigned long) this->irq_notifications_.load(std::memory_order_relaxed),
+-             (unsigned long) this->headers_ok_.load(std::memory_order_relaxed),
+-             (unsigned long) this->headers_failed_.load(std::memory_order_relaxed),
+-             (unsigned long) this->payloads_ok_.load(std::memory_order_relaxed),
+-             (unsigned long) this->payloads_failed_.load(std::memory_order_relaxed),
+-             (unsigned long) this->long_radio_frames_.load(std::memory_order_relaxed),
+-             (unsigned long) this->queue_drops_.load(std::memory_order_relaxed));
+-  }
++  // GPIO4 interrupts indicate the FIFO threshold, not a confirmed meter.
++  // SHWM v4.10 RX_DIAG_5M: main-loop snapshot; zero extra work in radio ISR/task.
++  const uint32_t now = millis();
++  if ((uint32_t) (now - this->last_diag_log_ms_) >= 300000u) {
++    const uint32_t window_ms = (uint32_t) (now - this->last_diag_log_ms_);
++    this->last_diag_log_ms_ = now;
++    const RxDiagSnapshot current{
++        this->irq_notifications_.load(std::memory_order_relaxed),
++        this->headers_ok_.load(std::memory_order_relaxed),
++        this->headers_failed_.load(std::memory_order_relaxed),
++        this->payloads_ok_.load(std::memory_order_relaxed),
++        this->payloads_failed_.load(std::memory_order_relaxed),
++        this->long_radio_frames_.load(std::memory_order_relaxed),
++        this->queue_drops_.load(std::memory_order_relaxed),
++        this->frame_converted_.load(std::memory_order_relaxed),
++        this->frame_conversion_failed_.load(std::memory_order_relaxed),
++    };
++    const RxDiagSnapshot window = rx_diag_delta(current, this->last_diag_window_);
++    this->last_diag_window_ = current;
++    ESP_LOGI(TAG, "RX_DIAG_5M window_ms=%lu irq=%lu header_ok=%lu header_fail=%lu payload_ok=%lu payload_fail=%lu long_frames=%lu frame_ok=%lu frame_fail=%lu queue_drops=%lu",
++             (unsigned long) window_ms,
++             (unsigned long) window.irq_notifications,
++             (unsigned long) window.headers_ok,
++             (unsigned long) window.headers_failed,
++             (unsigned long) window.payloads_ok,
++             (unsigned long) window.payloads_failed,
++             (unsigned long) window.long_radio_frames,
++             (unsigned long) window.frame_converted,
++             (unsigned long) window.frame_conversion_failed,
++             (unsigned long) window.queue_drops);
++    ESP_LOGI(TAG, "RX_DIAG cumulative irq_notifications=%lu header_ok=%lu header_fail=%lu payload_ok=%lu payload_fail=%lu long_radio_frames=%lu queue_drops=%lu",
++             (unsigned long) current.irq_notifications,
++             (unsigned long) current.headers_ok,
++             (unsigned long) current.headers_failed,
++             (unsigned long) current.payloads_ok,
++             (unsigned long) current.payloads_failed,
++             (unsigned long) current.long_radio_frames,
++             (unsigned long) current.queue_drops);
++  }
+   Packet *p;
+@@ -85,6 +85,9 @@
+   auto frame = p->convert_to_frame();
+ 
+-  if (!frame)
+-    return;
++  if (!frame) {
++    this->frame_conversion_failed_.fetch_add(1, std::memory_order_relaxed);
++    return;
++  }
++  this->frame_converted_.fetch_add(1, std::memory_order_relaxed);
+ 
+   ESP_LOGV(TAG, "Have data (%zu bytes) [RSSI: %ddBm, mode: %s %s]",
