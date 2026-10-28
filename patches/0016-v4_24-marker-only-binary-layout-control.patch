@@ -1,0 +1,7 @@
+diff --git a/components/wmbus_radio/component.cpp b/components/wmbus_radio/component.cpp
+--- a/components/wmbus_radio/component.cpp
++++ b/components/wmbus_radio/component.cpp
+@@ -37,2 +37,2 @@
+-  ESP_LOGI(TAG, "SHWM wMBus v4.17 ACTIVE: midpoint 100us long no-progress polling; v4.16 preserved");
++  ESP_LOGI(TAG, "SHWM wMBus v4.17 ACTIVE: midpoint 100us long no-progress polling; v4.16 preserved [SHWM v4.24 MARKER_ONLY]");
+   ESP_LOGI(TAG, "Receiver task created [%p]", this->receiver_task_handle_);
