@@ -1,14 +1,10 @@
-# wMBus GAMA 350 Reader for ESPHome
+# wM-Bus GAMA350 + Apator for ESPHome
 
-ESP32 + CC1101 · Home Assistant · GAMA 350 (`amiplus`) · Apator (`apatorna1`)
+**Field-tested stable v4.9 receiver (ESP32 + CC1101).** Tested with ESPHome 2026.10.1 on October 29, 2026. The radio firmware uses the validated, frozen eight-patch v4.9 implementation. Supports GAMA350 (`amiplus`) and Apator (`apatorna1`).
 
-**Official public v4 diagnostic source. Installs directly from GitHub in ESPHome — no terminal, clone, patches or local paths required.**
+## Install
 
-[Instrukcja po polsku](README.pl.md) · [Diagnostics and rollback](docs/V4_DIAGNOSTICS.md) · [Upstream project](https://github.com/SzczepanLeon/esphome-components)
-
-## 1. Install in ESPHome (recommended)
-
-Open your existing ESPHome device YAML and **replace its current `external_components` entry** with:
+Use this in your existing ESPHome YAML:
 
 ```yaml
 external_components:
@@ -16,46 +12,25 @@ external_components:
     components: [wmbus_radio, wmbus_common, wmbus_meter, socket_transmitter]
 ```
 
-Save → Validate → Install → Wirelessly. If previously using a different version of these components, perform **Clean Build Files** before installing.
+The tested installation uses `frequency: 868.970MHz` under `wmbus_radio`, but your installation may require another frequency. Preserve your existing GPIO pins, device settings and secrets. Back up your working YAML and firmware before OTA. If changing component versions, use **Clean Build Files** before validation.
 
-**Do not copy the example YAML over your device.** Keep your existing ESP32 pins, radio frequency, Wi-Fi/API/OTA configuration, meter IDs, AES keys, sensors and any UDP forwarding exactly as they were. Preserve a copy of the previously working YAML and firmware for rollback.
+[Sanitized example YAML](config/wmbus-gama350.yaml) · [Example secrets](config/secrets.example.yaml) · [Polski](README.pl.md)
 
-A working ESPHome 2026.10.0 installation with GitHub access is required. The first validation may take longer because the build system downloads the upstream component source automatically. There is no terminal command for the user.
+**Never publish production `secrets.yaml`.** The sample files contain placeholders, not the private device configuration.
 
-## 2. What makes this possible?
+## Provenance
 
-The public repository hosts four small ESPHome component entrypoints in `components/` and a pinned-source bootstrap loader. During the first validation on the ESPHome build host, the loader:
+- Hardware-tested v4.9 receiver commit: `11b09de7f87ade632453f772c37940dbdb470c94`.
+- Upstream: [SzczepanLeon/esphome-components](https://github.com/SzczepanLeon/esphome-components), pinned at `a732dd0e52c48973fad57e4950a11d8e2f2d6820`.
+- The component bootstrap fetches that upstream source and applies precisely `patches/0001–0008`. Manual cloning is not required for ordinary ESPHome installs.
+- CI tests guard the code, but RF reception still requires physical validation.
 
-1. Downloads [SzczepanLeon's original component repository](https://github.com/SzczepanLeon/esphome-components) at SHA `a732dd0e52c48973fad57e4950a11d8e2f2d6820`.
-2. Applies four inspectable local patch files from this repository.
-3. Verifies the unchanged 325 kHz CC1101 receiver filter and redacted AES config logs.
-4. Makes the downloaded components available to ESPHome for compilation.
+## Evidence and limitations
 
-**All these steps run automatically inside ESPHome.** The source pin guards against upstream changes, and there are no additional repositories or installers to configure in YAML. Unlike shipping a full fork, this project does not redistribute the original upstream files or the GPL-covered `wmbusmeters` implementation.
+With the receiver secured on a wall, both 868.950 and 868.970 MHz yielded approximately 99% success **among complete 326-byte GAMA frames received**. This is not a measure of all transmitted messages: silent nominal 30-second slots cannot be declared packet loss without a second independent receiver. 868.970 MHz was chosen for continued use, but a meaningful decode-success advantage over 868.950 MHz was not established.
 
-## 3. Real hardware evidence
+## Security and license
 
-The previous v3 code ran on a physical ESP32 in October 2026 with the garage door closed. In approximately 30 minutes it decoded 39 GAMA frames (out of ~60 transmissions expected at the observed 30-second rate), received 41 complete GAMA radio frames including two 3-of-6 errors, and decoded 161 Apator water meter telegrams. It therefore **works, but misses some GAMA transmissions**.
+Do not publish real Wi-Fi/API/OTA/AES secrets, meter IDs, or raw household measurement logs. This version masks the AES key in startup configuration logs, but DEBUG output may still contain private measurements. Repository-authored glue and patches are MIT; original upstream dependencies retain their own licenses. See [SECURITY.md](SECURITY.md) and [LICENSE](LICENSE).
 
-The v4 release retains v3 CC1101 radio configuration and adds diagnostic counters / modem snapshots, plus masks the AES key on boot. Its reception reliability **has not yet been measured on physical hardware**. A successful ESPHome CI build does not prove 100% reception.
-
-## 4. V4 diagnostics
-
-- Every five minutes: `RX_DIAG cumulative` counts the radio FIFO interrupt notifications, successful/failed headers and payload reads, long packets, and queue drops.
-- For complete long packets: `RF_DIAG` records `freqest_raw`, `lqi_raw`, `marcstate`.
-- Existing logs: `Long RX`, `unstable_rxbytes`, `Long frame 3of6 error`.
-- ESPHome startup config: `Key: [REDACTED]` instead of printing real meter AES secrets.
-
-A GPIO4/FIFO interrupt is **not** the same as a decoded meter telegram; the counters are diagnostic, not a transmission guarantee.
-
-## 5. Security and licensing
-
-No production keys or identifiable real telegram logs are committed. Older firmwares (including original upstream and v3) can print unredacted AES keys at boot. V4 masks that field but DEBUG logs may still contain private decrypted meter measurements. Redact before posting publicly.
-
-Original project glue and patches are MIT-licensed. The bootstrap fetches upstream sources separately and preserves their attribution and applicable licenses. Third-party upstream code is **not** relicensed by the repository's MIT license. See [SECURITY.md](SECURITY.md).
-
-### Developer-only manual build
-
-Developers who want a reproducible local tree can still run `bash scripts/prepare_cc1101_v4.sh`, but **this is not necessary for normal ESPHome installation**.
-
-This is a community read-only receiver, not a utility billing-certified device.
+This is a community read-only receiver, not a billing-certified utility meter.

@@ -1,14 +1,10 @@
-# wMBus GAMA 350 Reader — ESP32 + CC1101
+# wM-Bus GAMA350 + Apator — ESPHome / Home Assistant
 
-Odczyt licznika GAMA 350 i wodomierza Apator przez ESPHome / Home Assistant.
+**Stabilny odbiornik v4.9 (ESP32 + CC1101).** Zweryfikowany na rzeczywistym sprzęcie z ESPHome 2026.10.1, 29 października 2026. Kod radiowy (osiem poprawek) pozostaje zamrożony po testach. GAMA350 wykorzystuje dekoder `amiplus`, a wodomierz `apatorna1`.
 
-**Oficjalny wariant v4: instalacja prosto z GitHuba. Bez terminala, pobierania repozytorium, ręcznego nakładania poprawek czy kopiowania plików.**
+## Instalacja
 
-[English README](README.md) · [Diagnostyka i przywracanie](docs/V4_DIAGNOSTICS.md) · [Źródła SzczepanLeona](https://github.com/SzczepanLeon/esphome-components)
-
-## Instalacja w ESPHome — jedyna zmiana w YAML
-
-W edytorze istniejącego urządzenia ESPHome znajdź sekcję `external_components` i **zastąp ją** następującą:
+W istniejącej konfiguracji ESPHome użyj:
 
 ```yaml
 external_components:
@@ -16,37 +12,26 @@ external_components:
     components: [wmbus_radio, wmbus_common, wmbus_meter, socket_transmitter]
 ```
 
-Zapisz konfigurację i użyj **Validate → Install → Wirelessly**. Gdy przechodzisz z innej wersji komponentów, najpierw wybierz **Clean Build Files**. Przed pierwszym OTA zachowaj kopię obecnego YAML i działającego firmware.
+W sekcji `wmbus_radio` ustaw dla sprawdzonego stanowiska częstotliwość `868.970MHz`; odpowiednia częstotliwość może zależeć od lokalnej instalacji. Nie zmieniaj swoich pinów, identyfikatorów liczników, ustawień Wi-Fi, API, OTA ani kluczy. Przed aktualizacją zrób kopię YAML i działającego firmware. Dla starszego cache wybierz **Clean Build Files**, a następnie Validate i Install.
 
-Nie zmieniaj istniejących pinów, częstotliwości radia, kluczy AES, identyfikatorów liczników, sensorów, automatyzacji ani UDP. Nie podmieniaj własnej konfiguracji plikiem demonstracyjnym z repozytorium.
+[Przykładowy YAML (wyłącznie dane zastępcze)](config/wmbus-gama350.yaml) · [Szablon secrets](config/secrets.example.yaml) · [English](README.md)
 
-**To wszystko.** ESPHome samo pobiera i przygotowuje komponenty podczas walidacji. Pierwsza walidacja może potrwać dłużej; serwer ESPHome musi mieć dostęp do GitHuba. Testowane wydanie ESPHome: 2026.10.0.
+**Uwaga:** przykład nie jest kopią prywatnej konfiguracji urządzenia. Wszystkie prawdziwe wartości przechowuj w `secrets.yaml` poza GitHubem.
 
-## Co robi instalacja automatycznie?
+## Kod źródłowy i pochodzenie
 
-W repozytorium są małe komponenty instalacyjne, które pobierają kod autora z dokładnego commita `a732dd0e52c48973fad57e4950a11d8e2f2d6820`, nakładają poprawki `0001–0004` i udostępniają wynik kompilatorowi ESPHome. Nie trzeba do tego terminala.
+- Sprawdzona baza radiowa: commit `11b09de7f87ade632453f772c37940dbdb470c94` (v4.9).
+- Oryginalne komponenty: [SzczepanLeon/esphome-components](https://github.com/SzczepanLeon/esphome-components), przypięty commit `a732dd0e52c48973fad57e4950a11d8e2f2d6820`.
+- Bootstrap pobiera źródła upstream i aplikuje dokładnie osiem poprawek `patches/0001–0008`. Nie wymaga ręcznego klonowania.
+- Ścieżka odbioru 326-bajtowych ramek GAMA została przetestowana; Apator zachowuje obsługę krótkich telegramów.
+- Pliki `tests/` i `.github/workflows/` pomagają sprawdzać integralność kompilacji, ale testy komputerowe nie zastępują pomiarów radiowych.
 
-Nie rozpowszechniamy bezpośrednio cudzego kodu ze względu na prawa autorów i odrębne licencje bibliotek `wmbusmeters`. Kod jest pobierany z pierwotnego źródła na urządzeniu, na którym kompilujesz firmware.
+## Wyniki i ograniczenia
 
-## Co już działa?
-
-**V3 zostało przetestowane fizycznie:** przez około 30 minut poprawnie odczytano 39 telegramów GAMA (około 65% oczekiwanych), odebrano 41 pełnych ramek 326 B i poprawnie zdekodowano 161 telegramów Apatora. Nie jest to 100% niezawodności.
-
-**V4 zachowuje działający tor radiowy v3** (filtr 325 kHz) i dodaje:
-- `RX_DIAG` co 5 minut — liczba notyfikacji przerwań, poprawnych nagłówków, odczytów danych i błędów;
-- `RF_DIAG` — `FREQEST`, `LQI`, `MARCSTATE` po odebraniu długiej ramki;
-- `Key: [REDACTED]` — brak jawnego klucza AES w logu konfiguracji.
-
-**Odbiór v4 nie jest jeszcze przetestowany na fizycznym CC1101.** Zaliczenie testów i kompilacji nie zastępuje pomiaru jakości odbioru przy zamkniętej bramie.
+W testach z odbiornikiem zamocowanym na ścianie (około 80 cm) obie częstotliwości 868.950 i 868.970 MHz pozwalały poprawnie dekodować około 99% **kompletnie odebranych** ramek GAMA350. Nie oznacza to 99% wszystkich nadanych telegramów; bez drugiego odbiornika nie można zmierzyć rzeczywistej utraty transmisji. Ostatecznie wybrano 868.970 MHz, bez wykazanej istotnej przewagi skuteczności dekodowania.
 
 ## Bezpieczeństwo i licencje
 
-Zachowaj prywatność identyfikatorów liczników i kluczy. Starsze wydania mogły ujawniać klucz AES w logach startowych. Nawet v4 na poziomie DEBUG może wypisywać prywatne odczyty pomiarowe.
+Nie publikuj haseł Wi-Fi, kluczy API/OTA/AES, identyfikatorów liczników ani rzeczywistych logów pomiarowych. Startowe logi tej wersji ukrywają klucz AES jako `[REDACTED]`; inne logi DEBUG nadal mogą zawierać prywatne dane. Własne pliki i poprawki są na licencji MIT; pobierany kod upstream zachowuje własne licencje. Zobacz [SECURITY.md](SECURITY.md) i [LICENSE](LICENSE).
 
-Nasze pliki i poprawki są na licencji MIT. Część kodu zewnętrznego ma odrębne warunki, m.in. GPL; ten projekt ich nie zmienia.
-
-Szczegóły testowania oraz przywrócenia poprzedniej wersji: [docs/V4_DIAGNOSTICS.md](docs/V4_DIAGNOSTICS.md).
-
-### Dla programistów
-
-`scripts/prepare_cc1101_v4.sh` nadal służy do ręcznego budowania izolowanej kopii źródeł, ale **zwykły użytkownik ESPHome nigdy nie musi go uruchamiać**.
+To społecznościowy odbiornik odczytowy, a nie urządzenie certyfikowane do rozliczeń.

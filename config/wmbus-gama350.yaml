@@ -1,4 +1,5 @@
-# Example configuration. Keep the working device firmware until validation.
+# Public example for ESPHome 2026.10.1 and verified v4.9 components.
+# Do not commit your real secrets.yaml or paste real keys / meter IDs in GitHub.
 esphome:
   name: wmbus-reader
   friendly_name: wMBus Reader GAMA350
@@ -9,14 +10,8 @@ esp32:
     type: esp-idf
 
 external_components:
-  - source:
-      type: local
-      path: ../vendor/upstream/components
-    components:
-      - wmbus_radio
-      - wmbus_common
-      - wmbus_meter
-      - socket_transmitter
+  - source: github://smarthomewithme/wmbus-gama350-reader@main
+    components: [wmbus_radio, wmbus_common, wmbus_meter, socket_transmitter]
 
 logger:
   level: DEBUG
@@ -51,7 +46,7 @@ wmbus_radio:
   radio_type: CC1101
   cs_pin: GPIO15
   irq_pin: GPIO4
-  frequency: 868.950MHz
+  frequency: 868.970MHz
   sync_mode: NORMAL
 
 wmbus_meter:
