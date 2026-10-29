@@ -2,7 +2,29 @@
 
 **Read a GAMA 350 / GAMA350 electricity smart meter with an ESP32 and the Texas Instruments CC1101 868 MHz radio, using ESPHome and Home Assistant.** This open-source Wireless M-Bus (wM-Bus) project also supports an Apator water meter. Receive electricity consumption (kWh), day/night tariffs, current power (W), cold-water consumption (m³), and GAMA RSSI without a cloud service.
 
-[**Copy the complete ESPHome YAML**](config/wmbus-gama350.yaml) · [**Set up secrets.yaml**](config/secrets.example.yaml) · [**CC1101 + GAMA350 technical guide**](docs/CC1101_GAMA350.md) · [**Troubleshooting**](docs/TROUBLESHOOTING.md)
+## 📥 DOWNLOAD — TESTED & WORKING ESPHOME CONFIGURATION
+
+<div align="center">
+
+### ✅ READY-TO-CUSTOMIZE ESP32 + CC1101 GAMA350 READER
+
+**Field-tested v4.9 radio code · ESPHome 2026.10.1 build verified · Home Assistant compatible**
+
+<a href="https://github.com/smarthomewithme/wmbus-gama350-reader/raw/refs/heads/main/config/wmbus-gama350.yaml">
+  <img src="https://img.shields.io/badge/%E2%AC%87%20DOWNLOAD-TESTED%20ESPHOME%20YAML-2ea44f?style=for-the-badge" alt="Download tested and working ESPHome GAMA350 CC1101 YAML" />
+</a>
+
+### [📋 VIEW & COPY THE FULL YAML CODE](config/wmbus-gama350.yaml)
+
+**[🔑 GET THE SECRETS TEMPLATE](config/secrets.example.yaml)**
+
+</div>
+
+> **Start here:** Download the complete YAML, paste it into your ESPHome device configuration, and create a local `secrets.yaml` with your own Wi-Fi details, API/OTA credentials, meter IDs and AES keys. Check the GPIO connections and the meter's radio settings before installing. **The downloadable example contains no real private credentials.** It is a field-tested, working project template—not a preconfigured firmware image for every meter.
+
+---
+
+[**CC1101 + GAMA350 technical guide**](docs/CC1101_GAMA350.md) · [**Troubleshooting**](docs/TROUBLESHOOTING.md)
 
 > **Stable radio source:** This repository's public example deliberately uses `@experiment/v4.9-stable-marcstate-eof`. It is the *field-tested* firmware source. Do **not** replace that reference with `@main` just because you are reading the README on the default branch. The original verified radio commit is `11b09de7f87ade632453f772c37940dbdb470c94`. Documentation on `main` does not modify that stable branch.
 
