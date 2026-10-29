@@ -4,8 +4,6 @@
 
 ## 📥 DOWNLOAD — TESTED & WORKING ESPHOME CONFIGURATION
 
-<div align="center">
-
 ### ✅ READY-TO-CUSTOMIZE ESP32 + CC1101 GAMA350 READER
 
 **Field-tested v4.9 radio code · ESPHome 2026.10.1 build verified · Home Assistant compatible**
@@ -17,8 +15,6 @@
 ### [📋 VIEW & COPY THE FULL YAML CODE](config/wmbus-gama350.yaml)
 
 **[🔑 GET THE SECRETS TEMPLATE](config/secrets.example.yaml)**
-
-</div>
 
 > **Start here:** Download the complete YAML, paste it into your ESPHome device configuration, and create a local `secrets.yaml` with your own Wi-Fi details, API/OTA credentials, meter IDs and AES keys. Check the GPIO connections and the meter's radio settings before installing. **The downloadable example contains no real private credentials.** It is a field-tested, working project template—not a preconfigured firmware image for every meter.
 
