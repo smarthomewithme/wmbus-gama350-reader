@@ -1,25 +1,25 @@
-# Public example for ESPHome 2026.10.1 and verified v4.9 components.
-# Do not commit your real secrets.yaml or paste real keys / meter IDs in GitHub.
+# ESPHome: ESP32 + CC1101 Wireless M-Bus receiver
+# Tested radio source: v4.9 (do not change this reference without validation).
+# Copy this file into ESPHome, then create secrets.yaml next to it.
+# https://smarthomewithme.com
 esphome:
   name: wmbus-reader
-  friendly_name: wMBus Reader GAMA350
+  friendly_name: wM-Bus GAMA350 Reader
 
 esp32:
   board: esp32dev
   framework:
     type: esp-idf
 
-external_components:
-  - source: github://smarthomewithme/wmbus-gama350-reader@main
-    components: [wmbus_radio, wmbus_common, wmbus_meter, socket_transmitter]
-
 logger:
   level: DEBUG
+  baud_rate: 115200
   logs:
-    packet: DEBUG
-    wmbusmeters: DEBUG
+    packet: WARN
+    wmbusmeters: WARN
     main: INFO
-    CC1101: WARN
+    CC1101: DEBUG
+    wmbus: INFO
 
 api:
   encryption:
@@ -33,102 +33,153 @@ wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
   power_save_mode: none
+  # Optional: set a static IP if required by your network.
+  # manual_ip:
+  #   static_ip: 192.168.1.150
+  #   gateway: 192.168.1.1
+  #   subnet: 255.255.255.0
+  ap:
+    ssid: "GAMA350 Reader Setup"
+    password: !secret fallback_ap_password
+
+captive_portal:
+
+# Optional local web interface, protected with credentials.
+web_server:
+  port: 80
+  version: 3
+  auth:
+    username: !secret web_username
+    password: !secret web_password
+
+time:
+  - platform: sntp
+    id: time_sntp
+
+# Keep the proven CC1101 v4.9 radio implementation.
+external_components:
+  - source: github://smarthomewithme/wmbus-gama350-reader@experiment/v4.9-stable-marcstate-eof
+    refresh: always
+    components: [wmbus_radio, wmbus_common, socket_transmitter, wmbus_meter]
 
 spi:
   clk_pin: GPIO18
   mosi_pin: GPIO23
   miso_pin: GPIO19
 
+# Optional UDP forwarding: disabled by default.
+# To use it, configure your own receiver address in secrets.yaml.
+# socket_transmitter:
+#   id: my_socket
+#   ip_address: !secret udp_receiver_ip
+#   port: 7227
+#   protocol: UDP
+
 wmbus_common:
-  drivers: [amiplus, apatorna1]
+  drivers:
+    - amiplus
+    - apatorna1
 
 wmbus_radio:
   radio_type: CC1101
   cs_pin: GPIO15
   irq_pin: GPIO4
-  frequency: 868.970MHz
+  frequency: 868.970 MHz
   sync_mode: NORMAL
+  # Diagnostic raw frames may contain private meter metadata.
+  # Disable this on_frame logger if exporting logs publicly.
+  on_frame:
+    - then:
+        - logger.log:
+            format: "RSSI: %ddBm T: %s (%d)"
+            args: ['frame->rssi()', 'frame->as_hex().c_str()', 'frame->data().size()']
 
 wmbus_meter:
-  - id: gama350
-    meter_id: !secret gama350_meter_id
-    type: amiplus
-    key: !secret gama350_aes_key
-    mode: [T1, C1]
-    on_telegram:
-      - logger.log:
-          level: INFO
-          format: "GAMA 350 telegram successfully processed"
-
-  - id: apator
+  # Apator water meter (T1)
+  - id: water_meter
     meter_id: !secret apator_meter_id
     type: apatorna1
     key: !secret apator_aes_key
-    mode: [T1]
+    mode:
+      - T1
     on_telegram:
-      - logger.log:
-          level: INFO
-          format: "Apator telegram successfully processed"
+      then:
+        - logger.log:
+            format: "Water meter telegram received"
+            level: INFO
+
+  # GAMA 350 electricity smart meter (amiplus, T1/C1)
+  - id: electricity_meter
+    meter_id: !secret gama350_meter_id
+    type: amiplus
+    key: !secret gama350_aes_key
+    mode:
+      - T1
+      - C1
+    on_telegram:
+      then:
+        - logger.log:
+            format: "Electricity meter telegram received"
+            level: INFO
 
 sensor:
+  # Apator water consumption
   - platform: wmbus_meter
-    parent_id: gama350
-    field: total_energy_consumption_kwh
-    name: "GAMA 350 energia pobrana"
-    unit_of_measurement: "kWh"
-    device_class: energy
-    state_class: total_increasing
-    accuracy_decimals: 3
-  - platform: wmbus_meter
-    parent_id: gama350
-    field: total_energy_consumption_tariff_1_kwh
-    name: "GAMA 350 taryfa 1"
-    unit_of_measurement: "kWh"
-    device_class: energy
-    state_class: total_increasing
-    accuracy_decimals: 3
-  - platform: wmbus_meter
-    parent_id: gama350
-    field: total_energy_consumption_tariff_2_kwh
-    name: "GAMA 350 taryfa 2"
-    unit_of_measurement: "kWh"
-    device_class: energy
-    state_class: total_increasing
-    accuracy_decimals: 3
-  - platform: wmbus_meter
-    parent_id: gama350
-    field: current_power_consumption_kw
-    name: "GAMA 350 aktualna moc"
-    unit_of_measurement: "kW"
-    device_class: power
-    state_class: measurement
-    accuracy_decimals: 3
-  - platform: wmbus_meter
-    parent_id: gama350
-    field: rssi_dbm
-    name: "GAMA 350 RSSI"
-    unit_of_measurement: "dBm"
-    device_class: signal_strength
-    state_class: measurement
-    entity_category: diagnostic
-    accuracy_decimals: 0
-  - platform: wmbus_meter
-    parent_id: apator
+    parent_id: water_meter
     field: total_m3
-    name: "Apator zimna woda"
+    name: "Water - Cold Water"
+    accuracy_decimals: 3
     unit_of_measurement: "m³"
     device_class: water
     state_class: total_increasing
-    accuracy_decimals: 3
-  - platform: wmbus_meter
-    parent_id: apator
-    field: rssi_dbm
-    name: "Apator RSSI"
-    unit_of_measurement: "dBm"
-    device_class: signal_strength
-    state_class: measurement
-    entity_category: diagnostic
-    accuracy_decimals: 0
+    icon: "mdi:water"
 
-# Optional socket_transmitter/UDP settings must be retained separately
-# if they are already used by a working installation.
+  # GAMA 350 electricity consumption
+  - platform: wmbus_meter
+    parent_id: electricity_meter
+    field: total_energy_consumption_kwh
+    name: "Electricity - Total Consumption"
+    accuracy_decimals: 3
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: "mdi:flash"
+
+  - platform: wmbus_meter
+    parent_id: electricity_meter
+    field: total_energy_consumption_tariff_1_kwh
+    name: "Electricity - Day Tariff"
+    accuracy_decimals: 3
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: "mdi:weather-sunny"
+
+  - platform: wmbus_meter
+    parent_id: electricity_meter
+    field: total_energy_consumption_tariff_2_kwh
+    name: "Electricity - Night Tariff"
+    accuracy_decimals: 3
+    unit_of_measurement: "kWh"
+    device_class: energy
+    state_class: total_increasing
+    icon: "mdi:weather-night"
+
+  - platform: wmbus_meter
+    parent_id: electricity_meter
+    field: current_power_consumption_kw
+    name: "Electricity - Current Power"
+    accuracy_decimals: 0
+    device_class: power
+    unit_of_measurement: W
+    state_class: measurement
+    icon: "mdi:lightning-bolt"
+    filters:
+      - multiply: 1000
+
+  # CC1101 RSSI for received GAMA frames
+  - platform: wmbus_meter
+    parent_id: electricity_meter
+    field: rssi_dbm
+    name: "Electricity - RSSI"
+    entity_category: diagnostic

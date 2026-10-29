@@ -1,19 +1,24 @@
 # Security and privacy
 
-This repository accepts **no real AES meter keys, API tokens, Wi-Fi passwords, production `secrets.yaml`, or unredacted energy measurements**. `vendor/` and `config/secrets.yaml` are excluded from version control.
+This public ESPHome CC1101 / GAMA 350 Wireless M-Bus repository must never include real Wi-Fi credentials, API encryption keys, OTA passwords, fallback AP credentials, web authentication passwords, meter AES keys, private meter IDs, or raw household consumption logs.
 
-## AES keys in startup logs
+## Safe ESPHome setup
 
-The upstream component and public v3 source print the actual confidentiality key during `wmbus_meter::dump_config`. **Official v4 changes that field to `Key: [REDACTED]` without changing any meter keys or decryption logic.**
+- Store all real credentials and meter IDs in an untracked local `secrets.yaml`. The checked-in `config/secrets.example.yaml` contains **non-working placeholders and dummy identifiers**.
+- Generate unique strong passwords for Wi-Fi, OTA, fallback AP and web access. Generate a unique valid 32-byte Base64 ESPHome API encryption key.
+- The example web server includes authentication. Treat HTTP as local-network-only and do not port-forward it to the public Internet.
+- If you use UDP forwarding, configure an endpoint you own; leave the feature disabled by default.
+- Do not share your real ESPHome configuration in public issue reports.
 
-The patch does not remove secrets from logs previously shared or cached. Treat any older logs containing `[C][wmbus_meter:055] Key:` as sensitive. Delete/secure such logs from public locations and follow your meter provider's credential rotation process if available. **Never submit a real log of device startup without manually checking redaction**, regardless of patch version.
+## Raw radio logging and encryption
 
-DEBUG logs can also print decrypted telemetry and raw meter telegrams, which can reveal consumption and meter identity. Reduce log level before public sharing and mask network identifiers (MAC, IP, SSID, BSSID).
+The v4.9 patch masks the AES key in ESPHome startup `dump_config` output as `Key: [REDACTED]`. This does not protect previously published logs, or prevent other DEBUG and `on_frame` logs from exposing raw meter telegrams, consumption data, network details or identifiers. Inspect every diagnostic snippet and redact sensitive values before sharing.
 
-## Safe release scope
+If a real secret has been disclosed anywhere, rotate or revoke it wherever feasible. Updating a README or deleting a Git-tracked file does not remove leaked values from old Git commits, copies, logs, or external conversations. Meter-specific AES key rotation may require the meter operator.
 
-Only original project code, patch deltas, synthetic test fixtures and documentation are published. Upstream components are cloned at a pinned revision without vendoring their source. No public release includes an ESPHome configuration with production credentials.
+The project is a read-only hobbyist receiver, not an authoritative utility billing platform. Local law and the meter owner's authorization govern use.
 
-V4 is a read-only community diagnostic receiver. It does not issue control commands to the certified electricity meter and must not be used as an authoritative billing source.
+Original code and patches in this repository are MIT-licensed; upstream components retain their original licenses.
 
-If a secret is committed to Git history, deleting the working-tree file is insufficient: revoke/rotate when feasible and purge the affected history through an appropriate incident response process.
+Security and disclosure contact: **smarthomewithme@gmail.com**  
+Project website: https://smarthomewithme.com/
